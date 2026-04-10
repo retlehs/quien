@@ -22,6 +22,7 @@ var dateFormats = []string{
 	"2006-01-02 15:04:05 MST",
 	"2006-01-02 15:04:05-07",
 	"Mon Jan 2 15:04:05 MST 2006",
+	"Mon Jan 2 2006",
 }
 
 // Parse extracts structured domain info from a raw WHOIS response.
@@ -32,11 +33,11 @@ func Parse(raw string) model.DomainInfo {
 
 	kv := extractKeyValues(raw)
 
-	info.DomainName = firstValue(kv, "domain name")
-	info.Registrar = firstValue(kv, "registrar", "registrar name")
+	info.DomainName = firstValue(kv, "domain name", "domain")
+	info.Registrar = firstValue(kv, "registrar", "registrar name", "name")
 	info.Status = allValues(kv, "domain status", "status")
-	info.Nameservers = allValues(kv, "name server", "nameserver", "nserver")
-	info.CreatedDate = parseDate(firstValue(kv, "creation date", "created", "created date", "registration date", "registered on", "registered"))
+	info.Nameservers = allValues(kv, "name server", "nameserver", "nameservers", "nserver")
+	info.CreatedDate = parseDate(firstValue(kv, "creation date", "created", "created date", "registration date", "registered on", "registered", "registration time"))
 	info.UpdatedDate = parseDate(firstValue(kv, "updated date", "last updated", "last modified", "changed"))
 	info.ExpiryDate = parseDate(firstValue(kv, "registry expiry date", "registrar registration expiration date", "expiry date", "expiration date", "expires on", "expires", "paid-till"))
 
@@ -72,19 +73,31 @@ func Parse(raw string) model.DomainInfo {
 
 func extractKeyValues(raw string) map[string][]string {
 	kv := make(map[string][]string)
+	var lastKey string
 	for _, line := range strings.Split(raw, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "%") || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ">") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "%") || strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, ">") {
+			lastKey = ""
 			continue
 		}
-		idx := strings.Index(line, ":")
+		idx := strings.Index(trimmed, ":")
 		if idx == -1 {
+			// Tab-indented continuation line (e.g. .be nameservers)
+			if lastKey != "" && (strings.HasPrefix(line, "\t") || strings.HasPrefix(line, "  ")) {
+				if trimmed != "" {
+					kv[lastKey] = append(kv[lastKey], trimmed)
+				}
+			}
 			continue
 		}
-		key := strings.ToLower(strings.TrimSpace(line[:idx]))
-		value := strings.TrimSpace(line[idx+1:])
+		key := strings.ToLower(strings.TrimSpace(trimmed[:idx]))
+		value := strings.TrimSpace(trimmed[idx+1:])
 		if value != "" {
 			kv[key] = append(kv[key], value)
+			lastKey = ""
+		} else {
+			// Section header with no value — subsequent indented lines belong to it
+			lastKey = key
 		}
 	}
 	return kv

@@ -23,6 +23,7 @@ var dateFormats = []string{
 	"2006-01-02 15:04:05-07",
 	"Mon Jan 2 15:04:05 MST 2006",
 	"Mon Jan 2 2006",
+	"2006/01/02 15:04:05 (MST)", // JPRS Last Update
 }
 
 // Parse extracts structured domain info from a raw WHOIS response.
@@ -34,10 +35,10 @@ func Parse(raw string) model.DomainInfo {
 	kv := extractKeyValues(raw)
 
 	info.DomainName = firstValue(kv, "domain name", "domain")
-	info.Registrar = firstValue(kv, "registrar", "registrar name", "name")
+	info.Registrar = firstValue(kv, "registrar", "registrar organization", "registrar name", "name")
 	info.Status = allValues(kv, "domain status", "status")
 	info.Nameservers = allValues(kv, "name server", "nameserver", "nameservers", "nserver")
-	info.CreatedDate = parseDate(firstValue(kv, "creation date", "created", "created date", "registration date", "registered on", "registered", "registration time"))
+	info.CreatedDate = parseDate(firstValue(kv, "creation date", "created", "created date", "registration date", "registered date", "registered on", "registered", "registration time"))
 	info.UpdatedDate = parseDate(firstValue(kv, "updated date", "last update", "last updated", "last modified", "changed"))
 	info.ExpiryDate = parseDate(firstValue(kv, "registry expiry date", "registrar registration expiration date", "expire date", "expiry date", "expiration date", "expires on", "expires", "paid-till"))
 
@@ -73,34 +74,81 @@ func Parse(raw string) model.DomainInfo {
 
 func extractKeyValues(raw string) map[string][]string {
 	kv := make(map[string][]string)
-	var lastKey string
-	for _, line := range strings.Split(raw, "\n") {
+	lines := strings.Split(raw, "\n")
+	var section string // current section name (normalized, e.g. "registrar", "admin")
+	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" || strings.HasPrefix(trimmed, "%") || strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, ">") {
-			lastKey = ""
+			section = ""
 			continue
 		}
+		indented := strings.HasPrefix(line, "\t") || strings.HasPrefix(line, " ")
 		idx := strings.Index(trimmed, ":")
+
 		if idx == -1 {
-			// Tab-indented continuation line (e.g. .be nameservers)
-			if lastKey != "" && (strings.HasPrefix(line, "\t") || strings.HasPrefix(line, "  ")) {
-				if trimmed != "" {
-					kv[lastKey] = append(kv[lastKey], trimmed)
-				}
+			if indented && section != "" {
+				// Indented value-only line inside a section (e.g. nic.it nameservers)
+				kv[section] = append(kv[section], trimmed)
+				continue
+			}
+			// Bare line — possibly a section header (e.g. nic.it "Registrar"),
+			// recognized only if the next non-blank line is indented.
+			if !indented && nextLineIndented(lines, i) {
+				section = normalizeSection(trimmed)
+			} else {
+				section = ""
 			}
 			continue
 		}
+
 		key := strings.ToLower(strings.TrimSpace(trimmed[:idx]))
 		value := strings.TrimSpace(trimmed[idx+1:])
-		if value != "" {
-			kv[key] = append(kv[key], value)
-			lastKey = ""
-		} else {
-			// Section header with no value — subsequent indented lines belong to it
-			lastKey = key
+		if value == "" {
+			// "Section:" header — subsequent indented lines belong to it
+			section = normalizeSection(trimmed[:idx])
+			continue
+		}
+		// Always record the bare key. If we're inside a section, also record
+		// a section-prefixed alias so callers can disambiguate (e.g. distinguish
+		// "registrar organization" from "registrant organization").
+		kv[key] = append(kv[key], value)
+		if indented && section != "" && section != key {
+			kv[section+" "+key] = append(kv[section+" "+key], value)
+		}
+		if !indented {
+			section = ""
 		}
 	}
 	return kv
+}
+
+func nextLineIndented(lines []string, i int) bool {
+	for j := i + 1; j < len(lines); j++ {
+		next := lines[j]
+		if strings.TrimSpace(next) == "" {
+			continue
+		}
+		return strings.HasPrefix(next, "\t") || strings.HasPrefix(next, " ")
+	}
+	return false
+}
+
+// normalizeSection maps a section header to the canonical prefix used by
+// extractContact and the field lookups (e.g. "Admin Contact" → "admin",
+// "Technical Contacts" → "tech", "Name Servers" → "nameservers").
+func normalizeSection(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	s = strings.TrimSuffix(s, " contacts")
+	s = strings.TrimSuffix(s, " contact")
+	switch s {
+	case "administrative", "admin":
+		return "admin"
+	case "technical", "tech":
+		return "tech"
+	case "name servers", "name server", "nameserver", "nameservers", "nserver":
+		return "nameservers"
+	}
+	return s
 }
 
 func firstValue(kv map[string][]string, keys ...string) string {

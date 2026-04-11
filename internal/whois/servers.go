@@ -7,14 +7,13 @@ import (
 )
 
 // Server returns the WHOIS server for the given TLD.
-// Resolution order: hardcoded map → IANA referral → whois.nic.{tld} guess.
+// Resolution order: hardcoded tlds map → IANA referral → whois.nic.{tld} guess.
 func Server(domain string) string {
-	parts := strings.Split(domain, ".")
-	tld := strings.ToLower(parts[len(parts)-1])
+	tld := tldOf(domain)
 
-	// 1. Check hardcoded map
-	if server, ok := tldServers[tld]; ok {
-		return server
+	// 1. Check hardcoded TLD config
+	if cfg, ok := tlds[tld]; ok && cfg.server != "" {
+		return cfg.server
 	}
 
 	// 2. Check IANA referral cache
@@ -74,12 +73,6 @@ var ianaCache = struct {
 	sync.RWMutex
 	m map[string]string
 }{m: make(map[string]string)}
-
-var tldServers = map[string]string{
-	"com": "whois.verisign-grs.com",
-	"net": "whois.verisign-grs.com",
-	"org": "whois.pir.org",
-}
 
 // PrintServer is a debug helper — prints what server would be used.
 func PrintServer(domain string) string {

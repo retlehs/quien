@@ -2,6 +2,7 @@ package resolver
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/retlehs/quien/internal/model"
 	"github.com/retlehs/quien/internal/rdap"
@@ -16,34 +17,86 @@ func LookupIP(ip string) (*rdap.IPInfo, error) {
 	})
 }
 
-// Lookup tries RDAP first, then falls back to WHOIS, with retry on each.
+// Lookup runs RDAP and WHOIS in parallel. RDAP is preferred for structured
+// data; WHOIS is used to fill in fields the registry RDAP omits (e.g. PIR/.org
+// returns no registrant entities, so we chase the registrar's WHOIS for
+// contacts) and to populate the raw view. WHOIS alone is the fallback when
+// RDAP isn't available for the TLD.
 func Lookup(domain string) (*model.DomainInfo, error) {
-	// Try RDAP first
-	if info, err := rdap.Query(domain); err == nil && info != nil {
-		// Also grab raw WHOIS for the raw tab (best effort)
-		if raw, err := whois.QueryWithReferral(domain); err == nil {
-			info.RawResponse = raw
+	var (
+		wg       sync.WaitGroup
+		rdapInfo *model.DomainInfo
+		whoisRaw string
+		whoisErr error
+	)
+
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		// Errors are ignored — RDAP failure just means we'll lean on WHOIS.
+		rdapInfo, _ = rdap.Query(domain)
+	}()
+	go func() {
+		defer wg.Done()
+		whoisRaw, whoisErr = retry.Do(func() (string, error) {
+			return whois.QueryWithReferral(domain)
+		})
+	}()
+	wg.Wait()
+
+	// RDAP succeeded — use it as the base, merge in any WHOIS-only fields.
+	if rdapInfo != nil {
+		if whoisErr == nil {
+			rdapInfo.RawResponse = whoisRaw
+			whoisInfo := whois.Parse(whois.Normalize(domain, whoisRaw))
+			mergeFromWhois(rdapInfo, &whoisInfo)
 		}
-		return info, nil
+		return rdapInfo, nil
 	}
 
-	// Fall back to WHOIS with retry
-	resp, err := retry.Do(func() (string, error) {
-		return whois.QueryWithReferral(domain)
-	})
-	if err != nil {
-		return nil, err
+	// RDAP unavailable — fall back to WHOIS alone.
+	if whoisErr != nil {
+		return nil, whoisErr
 	}
 
-	// Check if the response is effectively "not found"
-	if whois.LooksEmpty(resp) {
+	// Apply TLD-specific normalization (e.g. JPRS bracketed labels) before
+	// emptiness check and parsing. The original response is preserved for
+	// the raw view.
+	normalized := whois.Normalize(domain, whoisRaw)
+	if whois.LooksEmpty(normalized) {
 		return nil, fmt.Errorf("domain %s not found", domain)
 	}
 
-	info := whois.Parse(resp)
+	info := whois.Parse(normalized)
 	if info.DomainName == "" {
 		info.DomainName = domain
 	}
-	info.RawResponse = resp
+	info.RawResponse = whoisRaw
 	return &info, nil
+}
+
+// mergeFromWhois fills empty fields on the RDAP-derived info from the
+// WHOIS-parsed equivalent. RDAP wins where both have data.
+func mergeFromWhois(info *model.DomainInfo, w *model.DomainInfo) {
+	if info.Registrar == "" {
+		info.Registrar = w.Registrar
+	}
+	if len(info.Status) == 0 {
+		info.Status = w.Status
+	}
+	if len(info.Nameservers) == 0 {
+		info.Nameservers = w.Nameservers
+	}
+	if info.CreatedDate.IsZero() {
+		info.CreatedDate = w.CreatedDate
+	}
+	if info.UpdatedDate.IsZero() {
+		info.UpdatedDate = w.UpdatedDate
+	}
+	if info.ExpiryDate.IsZero() {
+		info.ExpiryDate = w.ExpiryDate
+	}
+	if len(info.Contacts) == 0 {
+		info.Contacts = w.Contacts
+	}
 }

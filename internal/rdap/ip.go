@@ -8,21 +8,28 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/retlehs/quien/internal/bgp"
+	"github.com/retlehs/quien/internal/peeringdb"
 )
 
 type IPInfo struct {
-	IP        string
-	Name      string
-	Handle    string
-	Network   string // CIDR
-	Type      string
-	Country   string
-	StartAddr string
-	EndAddr   string
-	ASN       []ASNInfo
-	Org       string
-	Abuse     string
-	Hostnames []string // reverse DNS
+	IP              string
+	Name            string
+	Handle          string
+	Network         string // CIDR
+	Type            string
+	Country         string
+	StartAddr       string
+	EndAddr         string
+	ASN             []ASNInfo
+	BGP             *bgp.RouteInfo
+	BGPStatus       string
+	PeeringDB       *peeringdb.Network
+	PeeringDBStatus string
+	Org             string
+	Abuse           string
+	Hostnames       []string // reverse DNS
 }
 
 type ASNInfo struct {
@@ -116,12 +123,73 @@ func QueryIP(ip string) (*IPInfo, error) {
 
 	info := convertIPRDAP(&rdap, ip)
 
-	// Reverse DNS
-	if names, err := net.LookupAddr(ip); err == nil {
-		for _, n := range names {
-			info.Hostnames = append(info.Hostnames, strings.TrimSuffix(n, "."))
+	asn := firstASN(info.ASN)
+	var (
+		hostnames []string
+		bgpInfo   *bgp.RouteInfo
+		peerNet   *peeringdb.Network
+		bgpStatus string
+		pdbStatus string
+		fallback  *ASNInfo
+		wg        sync.WaitGroup
+	)
+
+	// Run optional enrichment lookups concurrently to avoid serial latency.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if names, err := net.LookupAddr(ip); err == nil {
+			for _, n := range names {
+				hostnames = append(hostnames, strings.TrimSuffix(n, "."))
+			}
 		}
+	}()
+
+	if asn > 0 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			// PeeringDB is best-effort enrichment; keep base IP lookup resilient.
+			if p, err := peeringdb.LookupASN(asn); err == nil {
+				peerNet = p
+				pdbStatus = "Enriched via RDAP ASN"
+			} else {
+				pdbStatus = "Lookup failed"
+			}
+		}()
+	} else {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			// BGP fallback is best-effort when RDAP lacks ASN/autnum data.
+			b, err := bgp.LookupIP(ip)
+			if err != nil {
+				bgpStatus = "Lookup failed"
+				pdbStatus = "No ASN available"
+				return
+			}
+			bgpInfo = b
+			asn = b.OriginASN
+			fallback = &ASNInfo{ASN: asn}
+
+			if p, err := peeringdb.LookupASN(asn); err == nil {
+				peerNet = p
+				pdbStatus = "Enriched via BGP ASN"
+			} else {
+				pdbStatus = "Lookup failed"
+			}
+		}()
 	}
+	wg.Wait()
+
+	info.Hostnames = hostnames
+	if fallback != nil {
+		info.ASN = append(info.ASN, *fallback)
+	}
+	info.BGP = bgpInfo
+	info.BGPStatus = bgpStatus
+	info.PeeringDB = peerNet
+	info.PeeringDBStatus = pdbStatus
 
 	return info, nil
 }
@@ -184,7 +252,27 @@ func convertIPRDAP(r *ipRDAPResponse, ip string) *IPInfo {
 		}
 	}
 
+	for _, autNum := range r.AutNums {
+		if autNum.StartAutNum <= 0 {
+			continue
+		}
+		info.ASN = append(info.ASN, ASNInfo{
+			Handle: autNum.Handle,
+			Name:   autNum.Name,
+			ASN:    autNum.StartAutNum,
+		})
+	}
+
 	return info
+}
+
+func firstASN(asns []ASNInfo) int {
+	for _, a := range asns {
+		if a.ASN > 0 {
+			return a.ASN
+		}
+	}
+	return 0
 }
 
 func extractVCardEmail(vcard []any) string {

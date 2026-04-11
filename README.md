@@ -38,7 +38,9 @@ quien --json example.com
 - **RDAP-first lookups** with WHOIS fallback for broad TLD coverage
 - **IANA referral** for automatic WHOIS server discovery
 - **Tech stack detection** including WordPress plugins, JS/CSS frameworks, and external services parsed from HTML
-- **IP lookups** with reverse DNS, network info, and abuse contacts via RDAP
+- **IP lookups** with reverse DNS, network info, abuse contacts, and ASN discovery via RDAP
+- **BGP fallback** for origin ASN/prefix when RDAP does not include ASN data
+- **PeeringDB enrichment** for ASN context (network/org, peering policy, peering locations, traffic profile, IX/facility counts)
 - **Automatic retry** with exponential backoff on all lookups
 - **JSON subcommands** for scripting: `quien dns`, `quien mail`, `quien tls`, `quien http`, `quien stack`, `quien all`
 

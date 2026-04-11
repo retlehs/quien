@@ -1,8 +1,11 @@
 package display
 
 import (
+	"context"
 	"fmt"
+	"net"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -66,30 +69,35 @@ var (
 const chromeHeight = 4
 
 type Model struct {
-	domain    string
-	isIP      bool
-	active    tab
-	showRaw   bool
-	info      *model.DomainInfo
-	ipInfo    *rdap.IPInfo
-	whoisErr  error
-	dnsData   *dns.Records
-	mailData  *mail.Records
-	tlsData   *tlsinfo.CertInfo
-	httpData  *httpinfo.Result
-	stackData *stack.Result
-	dnsErr    error
-	mailErr   error
-	tlsErr    error
-	httpErr   error
-	stackErr  error
-	loading   bool
-	quitting  bool
-	viewport  viewport.Model
-	spinner   spinner.Model
-	ready     bool
-	width     int
-	height    int
+	domain       string
+	isIP         bool
+	active       tab
+	showRaw      bool
+	info         *model.DomainInfo
+	ipInfo       *rdap.IPInfo
+	whoisErr     error
+	dnsData      *dns.Records
+	mailData     *mail.Records
+	tlsData      *tlsinfo.CertInfo
+	httpData     *httpinfo.Result
+	stackData    *stack.Result
+	dnsErr       error
+	mailErr      error
+	tlsErr       error
+	httpErr      error
+	stackErr     error
+	ipJumpErr    error
+	prevDomain   string
+	prevInfo     *model.DomainInfo
+	prevWhoisErr error
+	resolvingIP  bool
+	loading      bool
+	quitting     bool
+	viewport     viewport.Model
+	spinner      spinner.Model
+	ready        bool
+	width        int
+	height       int
 }
 
 type whoisResultMsg struct {
@@ -125,6 +133,11 @@ type httpResultMsg struct {
 type stackResultMsg struct {
 	result *stack.Result
 	err    error
+}
+
+type resolveIPResultMsg struct {
+	ip  string
+	err error
 }
 
 func NewModel(domain string) Model {
@@ -169,17 +182,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		SetWidth(m.width)
-
-		chrome := chromeHeight
-		if m.isIP {
-			chrome = 3 // top border + bottom border + footer (no tab bar)
-		}
-		vpHeight := m.height - chrome
-		if vpHeight < 1 {
-			vpHeight = 1
-		}
-
-		vpWidth := innerWidth()
+		vpWidth, vpHeight := m.viewportSize()
 
 		if !m.ready {
 			m.viewport = viewport.New(vpWidth, vpHeight)
@@ -205,6 +208,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.quitting = true
 			return m, tea.Quit
 		case "esc", "w":
+			if m.isIP && m.prevDomain != "" {
+				m.isIP = false
+				m.domain = m.prevDomain
+				m.active = tabWhois
+				m.showRaw = false
+				m.loading = false
+				m.resolvingIP = false
+				m.info = m.prevInfo
+				m.whoisErr = m.prevWhoisErr
+				m.ipInfo = nil
+				m.prevDomain = ""
+				m.prevInfo = nil
+				m.prevWhoisErr = nil
+				m.ipJumpErr = nil
+				if m.ready {
+					m.applyViewportSize()
+					m.updateViewport()
+					m.viewport.GotoTop()
+				}
+				return m, nil
+			}
 			m.switchTab(tabWhois)
 			return m, nil
 		case "d":
@@ -254,6 +278,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.viewport.GotoTop()
 				return m, nil
 			}
+		case "i":
+			if !m.isIP && m.active == tabWhois {
+				m.ipJumpErr = nil
+				m.resolvingIP = true
+				m.loading = true
+				m.updateViewport()
+				return m, resolveFirstIP(m.domain)
+			}
 		}
 
 	case spinner.TickMsg:
@@ -267,6 +299,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case whoisResultMsg:
 		m.loading = false
+		m.resolvingIP = false
 		if msg.err != nil {
 			m.whoisErr = msg.err
 		} else {
@@ -276,7 +309,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case ipResultMsg:
+		if !m.isIP {
+			return m, nil
+		}
 		m.loading = false
+		m.resolvingIP = false
 		if msg.err != nil {
 			m.whoisErr = msg.err
 		} else {
@@ -287,6 +324,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case mailResultMsg:
 		m.loading = false
+		m.resolvingIP = false
 		m.mailData = msg.records
 		m.mailErr = msg.err
 		m.updateViewport()
@@ -294,6 +332,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case dnsResultMsg:
 		m.loading = false
+		m.resolvingIP = false
 		m.dnsData = msg.records
 		m.dnsErr = msg.err
 		m.updateViewport()
@@ -301,6 +340,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tlsResultMsg:
 		m.loading = false
+		m.resolvingIP = false
 		m.tlsData = msg.cert
 		m.tlsErr = msg.err
 		m.updateViewport()
@@ -308,6 +348,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case httpResultMsg:
 		m.loading = false
+		m.resolvingIP = false
 		m.httpData = msg.result
 		m.httpErr = msg.err
 		m.updateViewport()
@@ -315,10 +356,40 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case stackResultMsg:
 		m.loading = false
+		m.resolvingIP = false
 		m.stackData = msg.result
 		m.stackErr = msg.err
 		m.updateViewport()
 		return m, nil
+
+	case resolveIPResultMsg:
+		m.loading = false
+		m.resolvingIP = false
+		if msg.err != nil {
+			m.ipJumpErr = msg.err
+			m.updateViewport()
+			return m, nil
+		}
+		m.ipJumpErr = nil
+		m.prevDomain = m.domain
+		m.prevInfo = m.info
+		m.prevWhoisErr = m.whoisErr
+		m.isIP = true
+		m.domain = msg.ip
+		m.active = tabWhois
+		m.showRaw = false
+		m.loading = true
+		m.info = nil
+		m.ipInfo = nil
+		m.whoisErr = nil
+
+		if m.ready {
+			m.applyViewportSize()
+			m.updateViewport()
+			m.viewport.GotoTop()
+		}
+
+		return m, fetchIP(msg.ip)
 	}
 
 	var cmd tea.Cmd
@@ -331,6 +402,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) switchTab(t tab) {
 	m.active = t
 	m.showRaw = false
+	m.ipJumpErr = nil
 	m.updateViewport()
 	m.viewport.GotoTop()
 }
@@ -359,6 +431,9 @@ func (m Model) contentForTab(t tab) string {
 				return RenderIP(m.ipInfo)
 			}
 			return ""
+		}
+		if m.loading && m.resolvingIP {
+			return m.loadingText("Resolving IP...")
 		}
 		if m.loading && m.info == nil {
 			return m.loadingText("Looking up WHOIS...")
@@ -484,6 +559,14 @@ func (m Model) View() string {
 			footerParts = append(footerParts, "r raw")
 		}
 	}
+	if m.ipJumpErr != nil {
+		footerParts = append(footerParts, "i failed")
+	} else if !m.isIP && m.active == tabWhois {
+		footerParts = append(footerParts, "i inspect ip")
+	}
+	if m.isIP && m.prevDomain != "" {
+		footerParts = append(footerParts, "esc/w back")
+	}
 	footerParts = append(footerParts, "q quit")
 	b.WriteString(footerStyle.Render(strings.Join(footerParts, "  •  ")))
 
@@ -556,6 +639,45 @@ func fetchIP(ip string) tea.Cmd {
 		})
 		return ipResultMsg{info: info, err: err}
 	}
+}
+
+func resolveFirstIP(domain string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		ips, err := net.DefaultResolver.LookupIPAddr(ctx, domain)
+		if err != nil {
+			return resolveIPResultMsg{err: err}
+		}
+		if len(ips) == 0 {
+			return resolveIPResultMsg{err: fmt.Errorf("no IP found for %s", domain)}
+		}
+
+		for _, ip := range ips {
+			if v4 := ip.IP.To4(); v4 != nil {
+				return resolveIPResultMsg{ip: v4.String()}
+			}
+		}
+		return resolveIPResultMsg{ip: ips[0].IP.String()}
+	}
+}
+
+func (m Model) viewportSize() (int, int) {
+	chrome := chromeHeight
+	if m.isIP {
+		chrome = 3 // top border + bottom border + footer (no tab bar)
+	}
+	vpHeight := m.height - chrome
+	if vpHeight < 1 {
+		vpHeight = 1
+	}
+	return innerWidth(), vpHeight
+}
+
+func (m *Model) applyViewportSize() {
+	vpWidth, vpHeight := m.viewportSize()
+	m.viewport.Width = vpWidth
+	m.viewport.Height = vpHeight
 }
 
 func fetchWhois(domain string) tea.Cmd {

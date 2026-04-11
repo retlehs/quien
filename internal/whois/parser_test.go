@@ -195,7 +195,27 @@ func TestParse_ITStyleFields(t *testing.T) {
 Status:             ok
 Created:            1998-10-29 00:00:00
 Last Update:        2026-03-05 00:53:35
-Expire Date:        2027-02-17`
+Expire Date:        2027-02-17
+
+Registrant
+  Organization:     Registrant name
+  Address:          Address of registrant line 1
+                    address more lines
+  Created:          2018-03-02 19:04:02
+  Last Update:      2018-03-02 19:04:02
+
+Admin Contact
+  Name:             Admin contact name
+  Organization:     Admin contact company
+
+Technical Contact
+  Name:             Tech contact name
+  Organization:     Tech contact company
+
+Registrar
+  Organization:     Registrar name
+  Name:             NAME-REG
+`
 
 	info := Parse(raw)
 
@@ -210,6 +230,9 @@ Expire Date:        2027-02-17`
 	}
 	if info.ExpiryDate.Year() != 2027 {
 		t.Errorf("ExpiryDate year = %d, want 2027", info.ExpiryDate.Year())
+	}
+	if info.Registrar != "Registrar name" {
+		t.Errorf("Registrar = %q, want Registrar name", info.Registrar)
 	}
 }
 

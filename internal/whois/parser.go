@@ -38,8 +38,8 @@ func Parse(raw string) model.DomainInfo {
 	info.Status = allValues(kv, "domain status", "status")
 	info.Nameservers = allValues(kv, "name server", "nameserver", "nameservers", "nserver")
 	info.CreatedDate = parseDate(firstValue(kv, "creation date", "created", "created date", "registration date", "registered on", "registered", "registration time"))
-	info.UpdatedDate = parseDate(firstValue(kv, "updated date", "last updated", "last modified", "changed"))
-	info.ExpiryDate = parseDate(firstValue(kv, "registry expiry date", "registrar registration expiration date", "expiry date", "expiration date", "expires on", "expires", "paid-till"))
+	info.UpdatedDate = parseDate(firstValue(kv, "updated date", "last update", "last updated", "last modified", "changed"))
+	info.ExpiryDate = parseDate(firstValue(kv, "registry expiry date", "registrar registration expiration date", "expire date", "expiry date", "expiration date", "expires on", "expires", "paid-till"))
 
 	dnssec := strings.ToLower(firstValue(kv, "dnssec"))
 	info.DNSSEC = dnssec == "signeddelegation" || dnssec == "yes" || dnssec == "signed"

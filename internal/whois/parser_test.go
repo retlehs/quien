@@ -190,6 +190,29 @@ Name Server: ns1.example.com`
 	}
 }
 
+func TestParse_ITStyleFields(t *testing.T) {
+	raw := `Domain:             example.it
+Status:             ok
+Created:            1998-10-29 00:00:00
+Last Update:        2026-03-05 00:53:35
+Expire Date:        2027-02-17`
+
+	info := Parse(raw)
+
+	if info.DomainName != "example.it" {
+		t.Errorf("DomainName = %q, want example.it", info.DomainName)
+	}
+	if info.CreatedDate.Year() != 1998 {
+		t.Errorf("CreatedDate year = %d, want 1998", info.CreatedDate.Year())
+	}
+	if info.UpdatedDate.Year() != 2026 {
+		t.Errorf("UpdatedDate year = %d, want 2026", info.UpdatedDate.Year())
+	}
+	if info.ExpiryDate.Year() != 2027 {
+		t.Errorf("ExpiryDate year = %d, want 2027", info.ExpiryDate.Year())
+	}
+}
+
 func TestParseDate(t *testing.T) {
 	tests := []struct {
 		input string

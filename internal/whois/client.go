@@ -84,7 +84,9 @@ func LooksEmpty(resp string) bool {
 		strings.Contains(lower, "no match") ||
 		strings.Contains(lower, "not found") ||
 		strings.Contains(lower, "no entries found") ||
-		strings.Contains(lower, "no data found") {
+		strings.Contains(lower, "no data found") ||
+		strings.Contains(lower, "no object found") ||
+		strings.Contains(lower, "status: free") {
 		return true
 	}
 	// Check if there's at least one key: value pair with domain info
@@ -92,8 +94,18 @@ func LooksEmpty(resp string) bool {
 		line = strings.TrimSpace(line)
 		l := strings.ToLower(line)
 		if strings.HasPrefix(l, "domain name:") ||
+			strings.HasPrefix(l, "domain:") ||
 			strings.HasPrefix(l, "creation date:") ||
-			strings.HasPrefix(l, "registrar:") {
+			strings.HasPrefix(l, "created:") ||
+			strings.HasPrefix(l, "updated date:") ||
+			strings.HasPrefix(l, "last update:") ||
+			strings.HasPrefix(l, "expiry date:") ||
+			strings.HasPrefix(l, "expire date:") ||
+			strings.HasPrefix(l, "registrar:") ||
+			strings.HasPrefix(l, "status:") ||
+			strings.HasPrefix(l, "domain status:") ||
+			strings.HasPrefix(l, "name server:") ||
+			strings.HasPrefix(l, "nameserver:") {
 			return false
 		}
 	}

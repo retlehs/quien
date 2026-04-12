@@ -630,8 +630,8 @@ func (m Model) tabList() []struct {
 		{"m", "Mail", tabMail},
 		{"s", "SSL/TLS", tabTLS},
 		{"h", "HTTP", tabHTTP},
-		{"t", "Stack", tabStack},
 		{"e", "SEO", tabSEO},
+		{"t", "Stack", tabStack},
 	}
 }
 

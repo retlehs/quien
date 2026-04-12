@@ -159,6 +159,14 @@ func query(name string, qtype uint16, resolver string) ([]mdns.RR, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Retry over TCP when the UDP response is truncated.
+	if resp.Truncated {
+		tcpClient := &mdns.Client{Timeout: timeout, Net: "tcp"}
+		resp, _, err = tcpClient.Exchange(msg, resolver)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if resp.Rcode != mdns.RcodeSuccess {
 		return nil, fmt.Errorf("DNS query failed: %s", mdns.RcodeToString[resp.Rcode])
 	}

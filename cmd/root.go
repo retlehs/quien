@@ -16,10 +16,11 @@ import (
 var jsonFlag bool
 
 var rootCmd = &cobra.Command{
-	Use:   "quien [domain or IP]",
-	Short: "A better WHOIS lookup tool",
-	Long:  "quien queries WHOIS/RDAP information for a domain or IP address and displays it in a clean, readable format.",
-	Args:  cobra.MaximumNArgs(1),
+	Use:          "quien [domain or IP]",
+	Short:        "A better WHOIS lookup tool",
+	Long:         "quien queries WHOIS/RDAP information for a domain or IP address and displays it in a clean, readable format.",
+	Args:         cobra.MaximumNArgs(1),
+	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// No args — show interactive prompt
 		if len(args) == 0 {
@@ -66,6 +67,11 @@ var rootCmd = &cobra.Command{
 }
 
 func runLookup(input string, isIP bool) error {
+	if !isIP {
+		if _, err := resolver.RegistrableDomain(input); err != nil {
+			return err
+		}
+	}
 	if term.IsTerminal(int(os.Stdout.Fd())) {
 		var m display.Model
 		if isIP {

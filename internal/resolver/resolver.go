@@ -23,6 +23,12 @@ func LookupIP(ip string) (*rdap.IPInfo, error) {
 // contacts) and to populate the raw view. WHOIS alone is the fallback when
 // RDAP isn't available for the TLD.
 func Lookup(domain string) (*model.DomainInfo, error) {
+	target, err := RegistrableDomain(domain)
+	if err != nil {
+		return nil, err
+	}
+	domain = target
+
 	var (
 		wg       sync.WaitGroup
 		rdapInfo *model.DomainInfo

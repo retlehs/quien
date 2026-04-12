@@ -6,15 +6,28 @@ pkgdesc="A better WHOIS lookup tool with interactive TUI"
 arch=('x86_64' 'aarch64')
 url="https://github.com/retlehs/quien"
 license=('MIT')
+depends=('glibc')
 makedepends=('go')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
 sha256sums=('SHA256SUM_SOURCE')
 
+prepare() {
+  cd "$pkgname-$pkgver"
+  export GOMODCACHE="${GOMODCACHE:-$srcdir/gomod}"
+  go mod download -modcacherw
+}
+
 build() {
   cd "$pkgname-$pkgver"
-  export CGO_ENABLED=0
-  export GOFLAGS="-trimpath -mod=readonly -modcacherw"
-  go build -ldflags="-s -w" -o "$pkgname" .
+  export CGO_CPPFLAGS="${CPPFLAGS}"
+  export CGO_CFLAGS="${CFLAGS}"
+  export CGO_CXXFLAGS="${CXXFLAGS}"
+  export CGO_LDFLAGS="${LDFLAGS}"
+  export GOFLAGS="-buildmode=pie -trimpath -mod=readonly -modcacherw"
+
+  go build \
+    -ldflags="-linkmode=external -X main.version=$pkgver" \
+    -o "$pkgname"
 }
 
 check() {

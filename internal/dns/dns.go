@@ -3,6 +3,7 @@ package dns
 import (
 	"fmt"
 	"net"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -125,9 +126,13 @@ func Lookup(domain string) (*Records, error) {
 	if rr, err := query(domain, mdns.TypeSOA, resolver); err == nil {
 		for _, r := range rr {
 			if soa, ok := r.(*mdns.SOA); ok {
+				admin, err := decodeRNAME(soa.Mbox)
+				if err != nil {
+					admin = soa.Mbox
+				}
 				records.SOA = &SOARecord{
 					PrimaryNS:  strings.TrimSuffix(soa.Ns, "."),
-					AdminEmail: strings.TrimSuffix(soa.Mbox, "."),
+					AdminEmail: admin,
 					Serial:     soa.Serial,
 					Refresh:    soa.Refresh,
 					Retry:      soa.Retry,
@@ -193,4 +198,34 @@ func findResolver() string {
 	}
 	// Fallback to Cloudflare
 	return "1.1.1.1:53"
+}
+
+// decodeRNAME decodes a DNS SOA RNAME field to its original mailbox format.
+// In DNS, RNAME is stored as: local-part.mail-domain => converts to mail@domain
+func decodeRNAME(rname string) (string, error) {
+	// Remove trailing dot if present
+	rname = strings.TrimSuffix(rname, ".")
+
+	// Split on unescaped dots (i.e., where previous char is not backslash)
+	var labels []string
+	start := 0
+	for i := 0; i < len(rname); i++ {
+		if rname[i] == '.' && (i == 0 || rname[i-1] != '\\') {
+			labels = append(labels, rname[start:i])
+			start = i + 1
+		}
+	}
+	labels = append(labels, rname[start:])
+
+	if len(labels) < 2 {
+		return "", fmt.Errorf("invalid RNAME: must contain both local-part and domain")
+	}
+
+	localPart := regexp.MustCompile(`\\([.@*/])`).ReplaceAllStringFunc(labels[0], func(match string) string {
+		// match is like `\.` or `@`, but only the escaped char part is captured
+		return match[1:] // skip the backslash
+	})
+	domain := strings.Join(labels[1:], ".")
+
+	return localPart + "@" + domain, nil
 }

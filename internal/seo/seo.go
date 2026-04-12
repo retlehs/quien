@@ -2,6 +2,7 @@ package seo
 
 import (
 	"crypto/tls"
+	"html"
 	"io"
 	"net"
 	"net/http"
@@ -86,8 +87,8 @@ func Analyze(domain string) (*Result, error) {
 // AnalyzeWithPage runs SEO analysis on pre-fetched page data.
 // Note: this still performs network I/O (robots.txt, compression check, CrUX API).
 func AnalyzeWithPage(page *stack.PageData, domain string) *Result {
-	html := string(page.Body)
-	lower := strings.ToLower(html)
+	rawHTML := string(page.Body)
+	lower := strings.ToLower(rawHTML)
 
 	client := &http.Client{
 		Timeout: timeout,
@@ -100,8 +101,8 @@ func AnalyzeWithPage(page *stack.PageData, domain string) *Result {
 	r := &Result{}
 
 	parseIndexability(r, client, page.BaseURL, page.Headers, lower)
-	parseOnPage(r, html, lower)
-	parseSocial(r, html, lower)
+	parseOnPage(r, rawHTML, lower)
+	parseSocial(r, rawHTML, lower)
 	parsePerfHints(r, page.Headers, lower, len(page.Body), page.BaseURL)
 
 	// CrUX integration — populated by crux.go if API key is set.
@@ -184,24 +185,24 @@ func fetchRobotsTxt(r *Result, client *http.Client, baseURL string) {
 
 // --- On-Page ---
 
-func parseOnPage(r *Result, html, lower string) {
+func parseOnPage(r *Result, rawHTML, lower string) {
 	// Title
-	if m := reTitle.FindStringSubmatch(html); len(m) > 1 {
-		r.OnPage.Title = strings.TrimSpace(m[1])
+	if m := reTitle.FindStringSubmatch(rawHTML); len(m) > 1 {
+		r.OnPage.Title = html.UnescapeString(strings.TrimSpace(m[1]))
 		r.OnPage.TitleLen = len(r.OnPage.Title)
 	}
 
 	// Meta description (handles both attribute orders)
-	if desc := metaName(lower, html, "description"); desc != "" {
+	if desc := metaName(lower, rawHTML, "description"); desc != "" {
 		r.OnPage.Description = desc
 		r.OnPage.DescLen = len(desc)
 	}
 
 	// H1
-	h1Matches := reH1.FindAllStringSubmatch(html, -1)
+	h1Matches := reH1.FindAllStringSubmatch(rawHTML, -1)
 	r.OnPage.H1Count = len(h1Matches)
 	if len(h1Matches) > 0 {
-		r.OnPage.H1 = strings.TrimSpace(stripTags(h1Matches[0][1]))
+		r.OnPage.H1 = html.UnescapeString(strings.TrimSpace(stripTags(h1Matches[0][1])))
 	}
 
 	// Images
@@ -221,16 +222,16 @@ func parseOnPage(r *Result, html, lower string) {
 
 // --- Social / Structured Data ---
 
-func parseSocial(r *Result, html, lower string) {
-	r.Social.OGTitle = metaProperty(lower, html, "og:title")
-	r.Social.OGDescription = metaProperty(lower, html, "og:description")
-	r.Social.OGImage = metaProperty(lower, html, "og:image")
-	r.Social.OGType = metaProperty(lower, html, "og:type")
-	r.Social.TwitterCard = metaName(lower, html, "twitter:card")
-	r.Social.TwitterSite = metaName(lower, html, "twitter:site")
+func parseSocial(r *Result, rawHTML, lower string) {
+	r.Social.OGTitle = metaProperty(lower, rawHTML, "og:title")
+	r.Social.OGDescription = metaProperty(lower, rawHTML, "og:description")
+	r.Social.OGImage = metaProperty(lower, rawHTML, "og:image")
+	r.Social.OGType = metaProperty(lower, rawHTML, "og:type")
+	r.Social.TwitterCard = metaName(lower, rawHTML, "twitter:card")
+	r.Social.TwitterSite = metaName(lower, rawHTML, "twitter:site")
 
 	// JSON-LD @type extraction
-	for _, m := range reJSONLD.FindAllStringSubmatch(html, -1) {
+	for _, m := range reJSONLD.FindAllStringSubmatch(rawHTML, -1) {
 		if len(m) > 1 {
 			for _, tm := range reSchemaType.FindAllStringSubmatch(m[1], -1) {
 				if len(tm) > 1 {
@@ -244,45 +245,44 @@ func parseSocial(r *Result, html, lower string) {
 	}
 }
 
-func metaProperty(lower, html, prop string) string {
+func metaProperty(lower, originalHTML, prop string) string {
 	re := regexp.MustCompile(`<meta[^>]+property=["']` + regexp.QuoteMeta(prop) + `["'][^>]+content=["']([^"']*)["']`)
 	if m := re.FindStringSubmatch(lower); len(m) > 1 {
-		// Try to get the original-case value
 		reOrig := regexp.MustCompile(`(?i)<meta[^>]+property=["']` + regexp.QuoteMeta(prop) + `["'][^>]+content=["']([^"']*)["']`)
-		if mo := reOrig.FindStringSubmatch(html); len(mo) > 1 {
-			return strings.TrimSpace(mo[1])
+		if mo := reOrig.FindStringSubmatch(originalHTML); len(mo) > 1 {
+			return html.UnescapeString(strings.TrimSpace(mo[1]))
 		}
-		return strings.TrimSpace(m[1])
+		return html.UnescapeString(strings.TrimSpace(m[1]))
 	}
 	// Try reversed attribute order: content before property
 	re2 := regexp.MustCompile(`<meta[^>]+content=["']([^"']*)["'][^>]+property=["']` + regexp.QuoteMeta(prop) + `["']`)
 	if m := re2.FindStringSubmatch(lower); len(m) > 1 {
 		re2Orig := regexp.MustCompile(`(?i)<meta[^>]+content=["']([^"']*)["'][^>]+property=["']` + regexp.QuoteMeta(prop) + `["']`)
-		if mo := re2Orig.FindStringSubmatch(html); len(mo) > 1 {
-			return strings.TrimSpace(mo[1])
+		if mo := re2Orig.FindStringSubmatch(originalHTML); len(mo) > 1 {
+			return html.UnescapeString(strings.TrimSpace(mo[1]))
 		}
-		return strings.TrimSpace(m[1])
+		return html.UnescapeString(strings.TrimSpace(m[1]))
 	}
 	return ""
 }
 
-func metaName(lower, html, name string) string {
+func metaName(lower, originalHTML, name string) string {
 	re := regexp.MustCompile(`<meta[^>]+name=["']` + regexp.QuoteMeta(name) + `["'][^>]+content=["']([^"']*)["']`)
 	if m := re.FindStringSubmatch(lower); len(m) > 1 {
 		reOrig := regexp.MustCompile(`(?i)<meta[^>]+name=["']` + regexp.QuoteMeta(name) + `["'][^>]+content=["']([^"']*)["']`)
-		if mo := reOrig.FindStringSubmatch(html); len(mo) > 1 {
-			return strings.TrimSpace(mo[1])
+		if mo := reOrig.FindStringSubmatch(originalHTML); len(mo) > 1 {
+			return html.UnescapeString(strings.TrimSpace(mo[1]))
 		}
-		return strings.TrimSpace(m[1])
+		return html.UnescapeString(strings.TrimSpace(m[1]))
 	}
 	// Reversed attribute order
 	re2 := regexp.MustCompile(`<meta[^>]+content=["']([^"']*)["'][^>]+name=["']` + regexp.QuoteMeta(name) + `["']`)
 	if m := re2.FindStringSubmatch(lower); len(m) > 1 {
 		re2Orig := regexp.MustCompile(`(?i)<meta[^>]+content=["']([^"']*)["'][^>]+name=["']` + regexp.QuoteMeta(name) + `["']`)
-		if mo := re2Orig.FindStringSubmatch(html); len(mo) > 1 {
-			return strings.TrimSpace(mo[1])
+		if mo := re2Orig.FindStringSubmatch(originalHTML); len(mo) > 1 {
+			return html.UnescapeString(strings.TrimSpace(mo[1]))
 		}
-		return strings.TrimSpace(m[1])
+		return html.UnescapeString(strings.TrimSpace(m[1]))
 	}
 	return ""
 }

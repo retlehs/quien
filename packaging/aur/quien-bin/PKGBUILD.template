@@ -1,0 +1,20 @@
+# Maintainer: Ben Word <ben@benword.com>
+pkgname=quien-bin
+_pkgname=quien
+pkgver=PKGVER
+pkgrel=1
+pkgdesc="A better WHOIS lookup tool with interactive TUI (pre-built binary)"
+arch=('x86_64' 'aarch64')
+url="https://github.com/retlehs/quien"
+license=('MIT')
+provides=("$_pkgname")
+conflicts=("$_pkgname")
+source_x86_64=("$_pkgname-$pkgver-amd64.tar.gz::$url/releases/download/v$pkgver/${_pkgname}_linux_amd64.tar.gz")
+source_aarch64=("$_pkgname-$pkgver-arm64.tar.gz::$url/releases/download/v$pkgver/${_pkgname}_linux_arm64.tar.gz")
+sha256sums_x86_64=('SHA256SUM_BIN_AMD64')
+sha256sums_aarch64=('SHA256SUM_BIN_ARM64')
+
+package() {
+  install -Dm755 "$_pkgname" "$pkgdir/usr/bin/$_pkgname"
+  install -Dm644 LICENSE.md "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

@@ -223,3 +223,44 @@ jobs:
 
       - name: Sync apt repository to R2
         run: rclone sync ./aptrepo r2:quien-apt
+
+      - name: Render AUR PKGBUILDs
+        if: ${{ !contains(github.ref_name, '-') }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          SHA_SRC=$(curl -fsSL "https://github.com/${{ github.repository }}/archive/${{ github.ref_name }}.tar.gz" | sha256sum | awk '{print $1}')
+          SHA_AMD64=$(sha256sum dist/quien_linux_amd64.tar.gz | awk '{print $1}')
+          SHA_ARM64=$(sha256sum dist/quien_linux_arm64.tar.gz | awk '{print $1}')
+
+          mkdir -p aur/quien aur/quien-bin
+          sed -e "s|PKGVER|$VERSION|g" \
+              -e "s|SHA256SUM_SOURCE|$SHA_SRC|g" \
+              packaging/aur/quien/PKGBUILD.template > aur/quien/PKGBUILD
+          sed -e "s|PKGVER|$VERSION|g" \
+              -e "s|SHA256SUM_BIN_AMD64|$SHA_AMD64|g" \
+              -e "s|SHA256SUM_BIN_ARM64|$SHA_ARM64|g" \
+              packaging/aur/quien-bin/PKGBUILD.template > aur/quien-bin/PKGBUILD
+
+      - name: Publish quien to AUR
+        if: ${{ !contains(github.ref_name, '-') }}
+        uses: KSXGitHub/github-actions-deploy-aur@v4.1.2
+        with:
+          pkgname: quien
+          pkgbuild: ./aur/quien/PKGBUILD
+          commit_username: Ben Word
+          commit_email: ben@benword.com
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: "Update to ${{ github.ref_name }}"
+          ssh_keyscan_types: rsa,ecdsa,ed25519
+
+      - name: Publish quien-bin to AUR
+        if: ${{ !contains(github.ref_name, '-') }}
+        uses: KSXGitHub/github-actions-deploy-aur@v4.1.2
+        with:
+          pkgname: quien-bin
+          pkgbuild: ./aur/quien-bin/PKGBUILD
+          commit_username: Ben Word
+          commit_email: ben@benword.com
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: "Update to ${{ github.ref_name }}"
+          ssh_keyscan_types: rsa,ecdsa,ed25519

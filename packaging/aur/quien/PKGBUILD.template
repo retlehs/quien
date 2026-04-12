@@ -1,0 +1,29 @@
+# Maintainer: Ben Word <ben@benword.com>
+pkgname=quien
+pkgver=PKGVER
+pkgrel=1
+pkgdesc="A better WHOIS lookup tool with interactive TUI"
+arch=('x86_64' 'aarch64')
+url="https://github.com/retlehs/quien"
+license=('MIT')
+makedepends=('go')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
+sha256sums=('SHA256SUM_SOURCE')
+
+build() {
+  cd "$pkgname-$pkgver"
+  export CGO_ENABLED=0
+  export GOFLAGS="-trimpath -mod=readonly -modcacherw"
+  go build -ldflags="-s -w" -o "$pkgname" .
+}
+
+check() {
+  cd "$pkgname-$pkgver"
+  go test ./...
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  install -Dm755 "$pkgname" "$pkgdir/usr/bin/$pkgname"
+  install -Dm644 LICENSE.md "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

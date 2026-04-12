@@ -3,9 +3,15 @@ version: 2
 builds:
   - env:
       - CGO_ENABLED=0
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
     goos:
       - linux
       - darwin
+      - windows
     goarch:
       - amd64
       - arm64
@@ -13,6 +19,21 @@ builds:
 archives:
   - format: tar.gz
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+
+nfpms:
+  - id: quien
+    package_name: quien
+    vendor: retlehs
+    homepage: https://github.com/retlehs/quien
+    maintainer: Ben Word <ben@benword.com>
+    description: A better WHOIS lookup tool with interactive TUI
+    license: MIT
+    formats:
+      - deb
+    bindir: /usr/bin
 
 changelog:
   sort: asc

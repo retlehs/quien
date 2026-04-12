@@ -6,12 +6,20 @@ A better WHOIS lookup tool. Interactive TUI with tabbed views for WHOIS, DNS, ma
 
 ## Install
 
+**Homebrew**
+
 ```
 brew tap retlehs/tap
 brew install retlehs/tap/quien
 ```
 
-Or with Go:
+**Ubuntu / Debian**
+
+```
+curl -fsSL https://apt.quien.dev/install.sh | sudo sh
+```
+
+**Go**
 
 ```
 go install github.com/retlehs/quien@latest
@@ -37,6 +45,7 @@ quien --json example.com
 
 - **RDAP-first lookups** with WHOIS fallback for broad TLD coverage
 - **IANA referral** for automatic WHOIS server discovery
+- **Mail configuration audit** — MX, SPF, DMARC, DKIM, and BIMI with VMC chain validation
 - **Tech stack detection** including WordPress plugins, JS/CSS frameworks, and external services parsed from HTML
 - **IP lookups** with reverse DNS, network info, abuse contacts, and ASN discovery via RDAP
 - **BGP fallback** for origin ASN/prefix when RDAP does not include ASN data

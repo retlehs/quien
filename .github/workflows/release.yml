@@ -117,3 +117,109 @@ jobs:
           fi
           git commit -m "quien $VERSION"
           git push
+
+      - name: Install apt repo tooling
+        run: sudo apt-get update && sudo apt-get install -y apt-utils gnupg rclone
+
+      - name: Import GPG signing key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          echo "${GPG_KEY_ID}:6:" | gpg --import-ownertrust
+
+      - name: Configure rclone for R2
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        run: |
+          mkdir -p ~/.config/rclone
+          cat > ~/.config/rclone/rclone.conf <<EOF
+          [r2]
+          type = s3
+          provider = Cloudflare
+          access_key_id = ${R2_ACCESS_KEY_ID}
+          secret_access_key = ${R2_SECRET_ACCESS_KEY}
+          endpoint = ${R2_ENDPOINT}
+          acl = private
+          EOF
+
+      - name: Build signed apt repository
+        if: ${{ !contains(github.ref_name, '-') }}
+        env:
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+        run: |
+          mkdir -p aptrepo/pool/main/q/quien
+
+          # Preserve history: pull existing pool (ignore failure on first run)
+          rclone copy r2:quien-apt/pool ./aptrepo/pool || true
+
+          # Drop new .debs into the pool
+          cp dist/*.deb ./aptrepo/pool/main/q/quien/
+
+          # Generate per-arch Packages files. Running apt-ftparchive from
+          # inside aptrepo/ so the Filename: paths inside Packages are
+          # relative to the repo root (pool/main/...), which is what apt
+          # joins with the base URL.
+          for arch in amd64 arm64; do
+            mkdir -p "aptrepo/dists/stable/main/binary-$arch"
+            ( cd aptrepo && apt-ftparchive --arch "$arch" packages pool ) \
+              > "aptrepo/dists/stable/main/binary-$arch/Packages"
+            gzip -kf "aptrepo/dists/stable/main/binary-$arch/Packages"
+            if ! [ -s "aptrepo/dists/stable/main/binary-$arch/Packages" ]; then
+              echo "ERROR: Packages file for $arch is empty" >&2
+              exit 1
+            fi
+          done
+
+          cat > apt-release.conf <<'CONF'
+          APT::FTPArchive::Release::Origin "quien";
+          APT::FTPArchive::Release::Label "quien";
+          APT::FTPArchive::Release::Suite "stable";
+          APT::FTPArchive::Release::Codename "stable";
+          APT::FTPArchive::Release::Architectures "amd64 arm64";
+          APT::FTPArchive::Release::Components "main";
+          APT::FTPArchive::Release::Description "quien apt repository";
+          CONF
+
+          apt-ftparchive -c apt-release.conf release aptrepo/dists/stable > aptrepo/dists/stable/Release
+
+          gpg --default-key "$GPG_KEY_ID" --batch --yes -abs \
+            -o aptrepo/dists/stable/Release.gpg aptrepo/dists/stable/Release
+          gpg --default-key "$GPG_KEY_ID" --batch --yes --clearsign \
+            -o aptrepo/dists/stable/InRelease aptrepo/dists/stable/Release
+
+          gpg --armor --export "$GPG_KEY_ID" > aptrepo/pubkey.gpg
+
+          cat > aptrepo/install.sh <<'SH'
+          #!/bin/sh
+          set -eu
+
+          KEYRING=/usr/share/keyrings/quien.gpg
+          SOURCES=/etc/apt/sources.list.d/quien.list
+
+          if [ "$(id -u)" -ne 0 ]; then
+            echo "This script must be run as root (try: curl -fsSL https://apt.quien.dev/install.sh | sudo sh)" >&2
+            exit 1
+          fi
+
+          echo "Installing quien apt repository..."
+
+          curl -fsSL https://apt.quien.dev/pubkey.gpg | gpg --dearmor -o "$KEYRING"
+          chmod 644 "$KEYRING"
+
+          echo "deb [signed-by=$KEYRING] https://apt.quien.dev stable main" > "$SOURCES"
+          chmod 644 "$SOURCES"
+
+          apt-get update
+          apt-get install -y quien
+
+          echo ""
+          echo "quien installed. Try: quien google.com"
+          SH
+          chmod +x aptrepo/install.sh
+
+      - name: Sync apt repository to R2
+        run: rclone sync ./aptrepo r2:quien-apt

@@ -236,6 +236,74 @@ Registrar
 	}
 }
 
+func TestParse_NicITSectionedFormat(t *testing.T) {
+	raw := `Domain:             example.it
+Status:             ok
+
+Registrant
+  Organization:     hidden
+
+Admin Contact
+  Name:             alice hidden
+  Organization:     hidden
+
+Technical Contacts
+  Name:             bob hidden
+  Organization:     hidden
+
+Registrar
+  Organization:     NameCase GmbH
+  Name:             NAMECASE-REG
+  DNSSEC:           no
+
+Nameservers
+  ns1.nidomans.com
+  ns2.nidomans.com`
+
+	info := Parse(raw)
+
+	if info.Registrar != "NameCase GmbH" {
+		t.Errorf("Registrar = %q, want NameCase GmbH (registrar org should beat registrant org)", info.Registrar)
+	}
+	if len(info.Nameservers) != 2 || info.Nameservers[0] != "ns1.nidomans.com" {
+		t.Errorf("Nameservers = %v, want [ns1.nidomans.com ns2.nidomans.com]", info.Nameservers)
+	}
+	// Section-prefixed aliases should disambiguate name fields too.
+	var admin, tech *string
+	for i := range info.Contacts {
+		switch info.Contacts[i].Role {
+		case "admin":
+			admin = &info.Contacts[i].Name
+		case "tech":
+			tech = &info.Contacts[i].Name
+		}
+	}
+	if admin == nil || *admin != "alice hidden" {
+		t.Errorf("admin contact name = %v, want alice hidden", admin)
+	}
+	if tech == nil || *tech != "bob hidden" {
+		t.Errorf("tech contact name = %v, want bob hidden", tech)
+	}
+}
+
+func TestParse_StateFieldDoesNotPolluteStatus(t *testing.T) {
+	// Indented "State: CA" inside a contact block (US state, not domain
+	// status) must not end up in info.Status.
+	raw := `Domain Name: example.com
+Domain Status: ok
+Registrant Name: Foo
+  State: CA
+  Country: US`
+
+	info := Parse(raw)
+
+	for _, s := range info.Status {
+		if s == "CA" {
+			t.Errorf("info.Status contains %q — geographic State leaked into Status", s)
+		}
+	}
+}
+
 func TestParseDate(t *testing.T) {
 	tests := []struct {
 		input string

@@ -15,6 +15,7 @@ type Records struct {
 	SPF   string
 	DMARC string
 	DKIM  []DKIMRecord
+	BIMI  *BIMIRecord `json:",omitempty"`
 }
 
 type MXRecord struct {
@@ -25,6 +26,25 @@ type MXRecord struct {
 type DKIMRecord struct {
 	Selector string
 	Value    string
+}
+
+type BIMIRecord struct {
+	Raw     string   `json:",omitempty"`
+	LogoURL string   `json:",omitempty"`
+	VMCURL  string   `json:",omitempty"`
+	VMC     *VMCInfo `json:",omitempty"`
+}
+
+type VMCInfo struct {
+	Subject    string    `json:",omitempty"`
+	Issuer     string    `json:",omitempty"`
+	NotBefore  time.Time `json:",omitempty"`
+	NotAfter   time.Time `json:",omitempty"`
+	IsExpired  bool      `json:",omitempty"`
+	DaysLeft   int       `json:",omitempty"`
+	ChainValid bool      `json:",omitempty"`
+	HasBIMIEKU bool      `json:",omitempty"`
+	Error      string    `json:",omitempty"`
 }
 
 const timeout = 5 * time.Second
@@ -90,6 +110,22 @@ func Lookup(domain string) (*Records, error) {
 				}
 			}
 		}
+	}
+
+	// BIMI — TXT at default._bimi.<domain>
+	if rr, err := query("default._bimi."+domain+".", mdns.TypeTXT, resolver); err == nil {
+		for _, r := range rr {
+			if txt, ok := r.(*mdns.TXT); ok {
+				val := strings.Join(txt.Txt, "")
+				if strings.HasPrefix(strings.ToLower(val), "v=bimi1") {
+					records.BIMI = parseBIMI(val)
+					break
+				}
+			}
+		}
+	}
+	if records.BIMI != nil && records.BIMI.VMCURL != "" {
+		records.BIMI.VMC = fetchVMC(records.BIMI.VMCURL)
 	}
 
 	// DKIM — probe common selectors

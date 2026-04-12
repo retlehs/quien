@@ -101,7 +101,9 @@ func init() {
 	rootCmd.Flags().BoolVar(&jsonFlag, "json", false, "output as JSON")
 }
 
-func Execute() {
+func Execute(version, commit, date string) {
+	rootCmd.Version = fmt.Sprintf("%s (commit %s, built %s)", version, commit, date)
+	rootCmd.SetVersionTemplate("quien version {{.Version}}\n")
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}

@@ -21,7 +21,7 @@ func startTruncatingDNSServer(t *testing.T, domain string, records []string) str
 
 	tcpLn, err := net.Listen("tcp", udpAddr)
 	if err != nil {
-		udpConn.Close()
+		_ = udpConn.Close()
 		t.Fatal(err)
 	}
 
@@ -37,7 +37,7 @@ func startTruncatingDNSServer(t *testing.T, domain string, records []string) str
 				})
 			}
 		}
-		w.WriteMsg(m)
+		_ = w.WriteMsg(m)
 	})
 
 	// UDP handler — always sets TC (truncated) flag with an empty answer.
@@ -45,18 +45,18 @@ func startTruncatingDNSServer(t *testing.T, domain string, records []string) str
 		m := new(mdns.Msg)
 		m.SetReply(r)
 		m.Truncated = true
-		w.WriteMsg(m)
+		_ = w.WriteMsg(m)
 	})
 
 	tcpServer := &mdns.Server{Listener: tcpLn, Handler: tcpHandler, Net: "tcp"}
 	udpServer := &mdns.Server{PacketConn: udpConn, Handler: udpHandler, Net: "udp"}
 
-	go tcpServer.ActivateAndServe()
-	go udpServer.ActivateAndServe()
+	go func() { _ = tcpServer.ActivateAndServe() }()
+	go func() { _ = udpServer.ActivateAndServe() }()
 
 	t.Cleanup(func() {
-		tcpServer.Shutdown()
-		udpServer.Shutdown()
+		_ = tcpServer.Shutdown()
+		_ = udpServer.Shutdown()
 	})
 
 	return udpAddr
@@ -98,11 +98,11 @@ func TestQueryUDPSuccessSkipsTCPFallback(t *testing.T) {
 				Txt: []string{txt},
 			})
 		}
-		w.WriteMsg(m)
+		_ = w.WriteMsg(m)
 	})
 	server := &mdns.Server{PacketConn: conn, Handler: handler, Net: "udp"}
-	go server.ActivateAndServe()
-	t.Cleanup(func() { server.Shutdown() })
+	go func() { _ = server.ActivateAndServe() }()
+	t.Cleanup(func() { _ = server.Shutdown() })
 
 	addr := conn.LocalAddr().String()
 	rr, err := query(domain, mdns.TypeTXT, addr)

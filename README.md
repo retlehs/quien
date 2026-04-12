@@ -4,6 +4,8 @@ A better WHOIS lookup tool. Interactive TUI with tabbed views for WHOIS, DNS, ma
 
 ![quien demo](demo.gif)
 
+Try it without installing: `ssh quien.sh`
+
 ## Install
 
 **Homebrew**

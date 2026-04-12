@@ -3,7 +3,6 @@ package dns
 import (
 	"fmt"
 	"net"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -128,7 +127,7 @@ func Lookup(domain string) (*Records, error) {
 			if soa, ok := r.(*mdns.SOA); ok {
 				admin, err := decodeRNAME(soa.Mbox)
 				if err != nil {
-					admin = soa.Mbox
+					admin = strings.TrimSuffix(soa.Mbox, ".")
 				}
 				records.SOA = &SOARecord{
 					PrimaryNS:  strings.TrimSuffix(soa.Ns, "."),
@@ -201,31 +200,35 @@ func findResolver() string {
 }
 
 // decodeRNAME decodes a DNS SOA RNAME field to its original mailbox format.
-// In DNS, RNAME is stored as: local-part.mail-domain => converts to mail@domain
+// The first unescaped dot separates the local-part from the domain.
+// Escaped dots (\.) in the local-part become literal dots in the email address.
+// This is a best-effort decoder; exotic escape sequences beyond \. are uncommon.
 func decodeRNAME(rname string) (string, error) {
-	// Remove trailing dot if present
 	rname = strings.TrimSuffix(rname, ".")
 
-	// Split on unescaped dots (i.e., where previous char is not backslash)
-	var labels []string
-	start := 0
+	// Find the first unescaped dot. A dot is escaped only if preceded by an
+	// odd number of backslashes (e.g. \. is escaped, \\. is not).
+	boundary := -1
 	for i := 0; i < len(rname); i++ {
-		if rname[i] == '.' && (i == 0 || rname[i-1] != '\\') {
-			labels = append(labels, rname[start:i])
-			start = i + 1
+		if rname[i] == '.' {
+			bs := 0
+			for j := i - 1; j >= 0 && rname[j] == '\\'; j-- {
+				bs++
+			}
+			if bs%2 == 0 {
+				boundary = i
+				break
+			}
 		}
 	}
-	labels = append(labels, rname[start:])
 
-	if len(labels) < 2 {
+	if boundary <= 0 || boundary >= len(rname)-1 {
 		return "", fmt.Errorf("invalid RNAME: must contain both local-part and domain")
 	}
 
-	localPart := regexp.MustCompile(`\\([.@*/])`).ReplaceAllStringFunc(labels[0], func(match string) string {
-		// match is like `\.` or `@`, but only the escaped char part is captured
-		return match[1:] // skip the backslash
-	})
-	domain := strings.Join(labels[1:], ".")
+	localPart := strings.ReplaceAll(rname[:boundary], "\\.", ".")
+	localPart = strings.ReplaceAll(localPart, "\\\\", "\\")
+	domain := rname[boundary+1:]
 
 	return localPart + "@" + domain, nil
 }

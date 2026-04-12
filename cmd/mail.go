@@ -10,7 +10,7 @@ import (
 
 var mailCmd = &cobra.Command{
 	Use:   "mail <domain>",
-	Short: "Mail configuration lookup — MX, SPF, DMARC, DKIM (JSON output)",
+	Short: "Mail configuration lookup — MX, SPF, DMARC, DKIM, BIMI (JSON output)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		domain := normalizeDomain(args[0])

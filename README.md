@@ -19,6 +19,12 @@ brew install retlehs/tap/quien
 curl -fsSL https://apt.quien.dev/install.sh | sudo sh
 ```
 
+**Arch Linux (AUR)**
+
+```
+yay -S quien
+```
+
 **Go**
 
 ```

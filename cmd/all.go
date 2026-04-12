@@ -9,6 +9,7 @@ import (
 	"github.com/retlehs/quien/internal/mail"
 	"github.com/retlehs/quien/internal/resolver"
 	"github.com/retlehs/quien/internal/retry"
+	"github.com/retlehs/quien/internal/seo"
 	"github.com/retlehs/quien/internal/stack"
 	"github.com/retlehs/quien/internal/tlsinfo"
 	"github.com/spf13/cobra"
@@ -21,6 +22,7 @@ type allResult struct {
 	TLS   *tlsinfo.CertInfo `json:"tls,omitempty"`
 	HTTP  *httpinfo.Result  `json:"http,omitempty"`
 	Stack *stack.Result     `json:"stack,omitempty"`
+	SEO   *seo.Result       `json:"seo,omitempty"`
 }
 
 var allCmd = &cobra.Command{
@@ -69,9 +71,10 @@ var allCmd = &cobra.Command{
 			result.HTTP = info
 		}
 
-		// Stack
-		if info, err := retry.Do(func() (*stack.Result, error) { return stack.Detect(input) }); err == nil {
-			result.Stack = info
+		// Stack + SEO (shared page fetch)
+		if page, err := retry.Do(func() (*stack.PageData, error) { return stack.FetchPage(input) }); err == nil {
+			result.Stack = stack.DetectFromPage(page.Headers, page.Body, input)
+			result.SEO = seo.AnalyzeWithPage(page, input)
 		}
 
 		return printJSON(result)

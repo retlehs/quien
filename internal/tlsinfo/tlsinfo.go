@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -46,7 +47,7 @@ func Lookup(domain string) (*CertInfo, error) {
 
 	info := &CertInfo{
 		Subject:   cert.Subject.CommonName,
-		Issuer:    cert.Issuer.CommonName,
+		Issuer:    issuerName(cert),
 		NotBefore: cert.NotBefore,
 		NotAfter:  cert.NotAfter,
 		SANs:      cert.DNSNames,
@@ -74,4 +75,17 @@ func keyUsageStrings(cert *x509.Certificate) []string {
 		}
 	}
 	return usages
+}
+
+func issuerName(cert *x509.Certificate) string {
+	cn := cert.Issuer.CommonName
+	org := strings.Join(cert.Issuer.Organization, ", ")
+	switch {
+	case org != "" && cn != "" && !strings.EqualFold(org, cn):
+		return org + " " + cn
+	case org != "":
+		return org
+	default:
+		return cn
+	}
 }

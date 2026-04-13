@@ -17,6 +17,7 @@ import (
 	"github.com/retlehs/quien/internal/rdap"
 	"github.com/retlehs/quien/internal/resolver"
 	"github.com/retlehs/quien/internal/retry"
+	"github.com/retlehs/quien/internal/seo"
 	"github.com/retlehs/quien/internal/stack"
 	"github.com/retlehs/quien/internal/tlsinfo"
 
@@ -32,6 +33,7 @@ const (
 	tabTLS
 	tabHTTP
 	tabStack
+	tabSEO
 )
 
 var (
@@ -39,7 +41,7 @@ var (
 			PaddingLeft(2)
 
 	tabStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#A0A0A0")).
+			Foreground(tabGray).
 			PaddingRight(2)
 
 	tabKeyStyle = lipgloss.NewStyle().
@@ -61,8 +63,7 @@ var (
 			Foreground(dim).
 			PaddingLeft(2)
 
-	borderColor = lipgloss.Color("#3A3A3A")
-	borderFg    = lipgloss.NewStyle().Foreground(borderColor)
+	borderFg = lipgloss.NewStyle().Foreground(border)
 )
 
 // chrome = tab bar (1) + top border (1) + bottom border (1) + footer (1)
@@ -81,11 +82,13 @@ type Model struct {
 	tlsData      *tlsinfo.CertInfo
 	httpData     *httpinfo.Result
 	stackData    *stack.Result
+	seoData      *seo.Result
 	dnsErr       error
 	mailErr      error
 	tlsErr       error
 	httpErr      error
 	stackErr     error
+	seoErr       error
 	ipJumpErr    error
 	prevDomain   string
 	prevInfo     *model.DomainInfo
@@ -132,6 +135,11 @@ type httpResultMsg struct {
 
 type stackResultMsg struct {
 	result *stack.Result
+	err    error
+}
+
+type seoResultMsg struct {
+	result *seo.Result
 	err    error
 }
 
@@ -271,6 +279,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, fetchStack(m.domain)
 			}
 			return m, nil
+		case "e":
+			m.switchTab(tabSEO)
+			if m.seoData == nil && m.seoErr == nil {
+				m.loading = true
+				m.updateViewport()
+				return m, fetchSEO(m.domain)
+			}
+			return m, nil
 		case "r":
 			if m.active == tabWhois && m.info != nil && m.info.RawResponse != "" {
 				m.showRaw = !m.showRaw
@@ -359,6 +375,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.resolvingIP = false
 		m.stackData = msg.result
 		m.stackErr = msg.err
+		m.updateViewport()
+		return m, nil
+
+	case seoResultMsg:
+		m.loading = false
+		m.resolvingIP = false
+		m.seoData = msg.result
+		m.seoErr = msg.err
 		m.updateViewport()
 		return m, nil
 
@@ -488,6 +512,14 @@ func (m Model) contentForTab(t tab) string {
 		} else if m.stackData != nil {
 			return RenderStack(m.stackData)
 		}
+	case tabSEO:
+		if m.loading {
+			return m.loadingText("Analyzing SEO & performance...")
+		} else if m.seoErr != nil {
+			return errorBox("SEO Analysis Failed", m.seoErr)
+		} else if m.seoData != nil {
+			return RenderSEO(m.seoData)
+		}
 	}
 	return ""
 }
@@ -597,6 +629,7 @@ func (m Model) tabList() []struct {
 		{"m", "Mail", tabMail},
 		{"s", "SSL/TLS", tabTLS},
 		{"h", "HTTP", tabHTTP},
+		{"e", "SEO", tabSEO},
 		{"t", "Stack", tabStack},
 	}
 }
@@ -720,6 +753,15 @@ func fetchHTTP(domain string) tea.Cmd {
 			return httpinfo.Lookup(domain)
 		})
 		return httpResultMsg{result: result, err: err}
+	}
+}
+
+func fetchSEO(domain string) tea.Cmd {
+	return func() tea.Msg {
+		result, err := retry.Do(func() (*seo.Result, error) {
+			return seo.Analyze(domain)
+		})
+		return seoResultMsg{result: result, err: err}
 	}
 }
 

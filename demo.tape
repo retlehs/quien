@@ -24,6 +24,9 @@ Sleep 3s
 Type "h"
 Sleep 3s
 
+Type "e"
+Sleep 3s
+
 Type "t"
 Sleep 3s
 

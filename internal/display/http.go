@@ -10,7 +10,7 @@ import (
 
 var (
 	headerNameStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#87AFFF"))
+			Foreground(accent)
 
 	headerValStyle = lipgloss.NewStyle().
 			Foreground(white)
@@ -19,7 +19,7 @@ var (
 				Foreground(dim)
 
 	redirectURLStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#A8A8A8"))
+				Foreground(muted)
 
 	statusOKStyle = lipgloss.NewStyle().
 			Foreground(green).

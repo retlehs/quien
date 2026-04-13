@@ -37,31 +37,17 @@ const (
 )
 
 func Detect(domain string) (*Result, error) {
-	client := &http.Client{
-		Timeout: timeout,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
-			DialContext:     (&net.Dialer{Timeout: 5 * time.Second}).DialContext,
-		},
-	}
-
-	resp, err := client.Get("https://" + domain)
-	if err != nil {
-		resp, err = client.Get("http://" + domain)
-		if err != nil {
-			return nil, err
-		}
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBodySize))
+	page, err := FetchPage(domain)
 	if err != nil {
 		return nil, err
 	}
+	return DetectFromPage(page.Headers, page.Body, domain), nil
+}
 
+// DetectFromPage runs stack detection on pre-fetched page data.
+func DetectFromPage(headers http.Header, body []byte, domain string) *Result {
 	html := string(body)
 	lower := strings.ToLower(html)
-	headers := resp.Header
 
 	r := &Result{}
 
@@ -84,7 +70,46 @@ func Detect(domain string) (*Result, error) {
 	sort.Strings(r.JSLibs)
 	sort.Strings(r.CSSLibs)
 
-	return r, nil
+	return r
+}
+
+// PageData holds the result of a page fetch.
+type PageData struct {
+	Headers http.Header
+	Body    []byte
+	BaseURL string // the URL that succeeded (https:// or http://)
+}
+
+// FetchPage fetches a domain's HTML page, trying HTTPS first with HTTP fallback.
+func FetchPage(domain string) (*PageData, error) {
+	client := &http.Client{
+		Timeout: timeout,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
+			DialContext:     (&net.Dialer{Timeout: 5 * time.Second}).DialContext,
+		},
+	}
+
+	baseURL := "https://" + domain
+	resp, err := client.Get(baseURL)
+	if err != nil {
+		baseURL = "http://" + domain
+		resp, err = client.Get(baseURL)
+		if err != nil {
+			return nil, err
+		}
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBodySize))
+	if err != nil {
+		return nil, err
+	}
+
+	// Use the final URL after redirects (e.g. example.com -> www.example.com)
+	finalURL := resp.Request.URL.Scheme + "://" + resp.Request.URL.Host
+
+	return &PageData{Headers: resp.Header, Body: body, BaseURL: finalURL}, nil
 }
 
 func detectCDN(r *Result, h http.Header) {

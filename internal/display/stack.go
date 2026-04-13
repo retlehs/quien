@@ -9,18 +9,18 @@ import (
 
 var (
 	tagStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#000000")).
-			Background(lipgloss.Color("#87AFFF")).
+			Foreground(ac("#FFFFFF", "#000000")).
+			Background(accent).
 			Padding(0, 1)
 
 	tagGreenStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#000000")).
+			Foreground(ac("#FFFFFF", "#000000")).
 			Background(green).
 			Padding(0, 1)
 
 	tagDimStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#000000")).
-			Background(lipgloss.Color("#6C6C6C")).
+			Foreground(ac("#FFFFFF", "#000000")).
+			Background(dim).
 			Padding(0, 1)
 )
 

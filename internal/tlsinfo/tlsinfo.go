@@ -45,6 +45,11 @@ func Lookup(domain string) (*CertInfo, error) {
 	cert := certs[0]
 	now := time.Now()
 
+	daysLeft := int(cert.NotAfter.Sub(now).Hours() / 24)
+	if daysLeft < 0 {
+		daysLeft = 0
+	}
+
 	info := &CertInfo{
 		Subject:   cert.Subject.CommonName,
 		Issuer:    issuerName(cert),
@@ -54,7 +59,7 @@ func Lookup(domain string) (*CertInfo, error) {
 		Serial:    cert.SerialNumber.Text(16),
 		SigAlgo:   cert.SignatureAlgorithm.String(),
 		IsExpired: now.After(cert.NotAfter),
-		DaysLeft:  int(cert.NotAfter.Sub(now).Hours() / 24),
+		DaysLeft:  daysLeft,
 	}
 
 	info.KeyUsage = keyUsageStrings(cert)

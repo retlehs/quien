@@ -168,7 +168,7 @@ func detectCMS(r *Result, h http.Header, html string) {
 	// WordPress
 	if isWordPress(html) {
 		r.CMS = "WordPress"
-		if m := regexp.MustCompile(`content="wordpress\s*([\d.]+)?"`).FindStringSubmatch(html); len(m) > 1 && m[1] != "" {
+		if m := wpVersionRe.FindStringSubmatch(html); len(m) > 1 && m[1] != "" {
 			r.CMS = "WordPress " + m[1]
 		}
 		detectWPPlugins(r, html)
@@ -190,7 +190,7 @@ func detectCMS(r *Result, h http.Header, html string) {
 		return
 	}
 	// Ghost
-	if m := regexp.MustCompile(`content="ghost\s*([\d.]+)?"`).FindStringSubmatch(html); len(m) > 0 {
+	if m := ghostVersionRe.FindStringSubmatch(html); len(m) > 0 {
 		r.CMS = "Ghost"
 		if m[1] != "" {
 			r.CMS = "Ghost " + m[1]
@@ -203,12 +203,12 @@ func detectCMS(r *Result, h http.Header, html string) {
 		return
 	}
 	// Joomla
-	if strings.Contains(html, "/media/jui/") || regexp.MustCompile(`content="joomla`).MatchString(html) {
+	if strings.Contains(html, "/media/jui/") || joomlaRe.MatchString(html) {
 		r.CMS = "Joomla"
 		return
 	}
 	// Hugo
-	if regexp.MustCompile(`content="hugo`).MatchString(html) {
+	if hugoRe.MatchString(html) {
 		r.CMS = "Hugo"
 		return
 	}
@@ -370,8 +370,12 @@ func detectCSSLibs(r *Result, html string) {
 
 // parseExternalServices extracts external domains from script src and link href tags.
 var (
-	scriptSrcRe = regexp.MustCompile(`<script[^>]+src=["']([^"']+)["']`)
-	linkHrefRe  = regexp.MustCompile(`<link[^>]+href=["']([^"']+)["']`)
+	scriptSrcRe    = regexp.MustCompile(`<script[^>]+src=["']([^"']+)["']`)
+	linkHrefRe     = regexp.MustCompile(`<link[^>]+href=["']([^"']+)["']`)
+	wpVersionRe    = regexp.MustCompile(`content="wordpress\s*([\d.]+)?"`)
+	ghostVersionRe = regexp.MustCompile(`content="ghost\s*([\d.]+)?"`)
+	joomlaRe       = regexp.MustCompile(`content="joomla`)
+	hugoRe         = regexp.MustCompile(`content="hugo`)
 )
 
 func parseExternalServices(r *Result, html string, siteDomain string) {

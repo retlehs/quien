@@ -239,54 +239,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.switchTab(tabWhois)
 			return m, nil
-		case "d":
-			m.switchTab(tabDNS)
-			if m.dnsData == nil && m.dnsErr == nil {
-				m.loading = true
-				m.updateViewport()
-				return m, fetchDNS(m.domain)
+		case "right", "tab":
+			if !m.isIP {
+				return m, m.activateTab(m.adjacentTab(1))
 			}
-			return m, nil
-		case "m":
-			m.switchTab(tabMail)
-			if m.mailData == nil && m.mailErr == nil {
-				m.loading = true
-				m.updateViewport()
-				return m, fetchMail(m.domain)
+		case "left", "shift+tab":
+			if !m.isIP {
+				return m, m.activateTab(m.adjacentTab(-1))
 			}
-			return m, nil
-		case "s":
-			m.switchTab(tabTLS)
-			if m.tlsData == nil && m.tlsErr == nil {
-				m.loading = true
-				m.updateViewport()
-				return m, fetchTLS(m.domain)
-			}
-			return m, nil
-		case "h":
-			m.switchTab(tabHTTP)
-			if m.httpData == nil && m.httpErr == nil {
-				m.loading = true
-				m.updateViewport()
-				return m, fetchHTTP(m.domain)
-			}
-			return m, nil
-		case "t":
-			m.switchTab(tabStack)
-			if m.stackData == nil && m.stackErr == nil {
-				m.loading = true
-				m.updateViewport()
-				return m, fetchStack(m.domain)
-			}
-			return m, nil
-		case "e":
-			m.switchTab(tabSEO)
-			if m.seoData == nil && m.seoErr == nil {
-				m.loading = true
-				m.updateViewport()
-				return m, fetchSEO(m.domain)
-			}
-			return m, nil
 		case "r":
 			if m.active == tabWhois && m.info != nil && m.info.RawResponse != "" {
 				m.showRaw = !m.showRaw
@@ -301,6 +261,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.loading = true
 				m.updateViewport()
 				return m, resolveFirstIP(m.domain)
+			}
+		default:
+			key := msg.String()
+			for _, t := range m.tabList() {
+				if t.key == key && t.t != m.active {
+					return m, m.activateTab(t.t)
+				}
 			}
 		}
 
@@ -429,6 +396,56 @@ func (m *Model) switchTab(t tab) {
 	m.ipJumpErr = nil
 	m.updateViewport()
 	m.viewport.GotoTop()
+}
+
+// activateTab switches to the given tab and returns a fetch command if data
+// hasn't been loaded yet. This centralises the switch-and-fetch logic so
+// that both letter-key and arrow/tab navigation share the same path.
+func (m *Model) activateTab(t tab) tea.Cmd {
+	m.switchTab(t)
+	var cmd tea.Cmd
+	switch t {
+	case tabDNS:
+		if m.dnsData == nil && m.dnsErr == nil {
+			cmd = fetchDNS(m.domain)
+		}
+	case tabMail:
+		if m.mailData == nil && m.mailErr == nil {
+			cmd = fetchMail(m.domain)
+		}
+	case tabTLS:
+		if m.tlsData == nil && m.tlsErr == nil {
+			cmd = fetchTLS(m.domain)
+		}
+	case tabHTTP:
+		if m.httpData == nil && m.httpErr == nil {
+			cmd = fetchHTTP(m.domain)
+		}
+	case tabStack:
+		if m.stackData == nil && m.stackErr == nil {
+			cmd = fetchStack(m.domain)
+		}
+	case tabSEO:
+		if m.seoData == nil && m.seoErr == nil {
+			cmd = fetchSEO(m.domain)
+		}
+	}
+	if cmd != nil {
+		m.loading = true
+		m.updateViewport()
+	}
+	return cmd
+}
+
+func (m *Model) adjacentTab(delta int) tab {
+	tabs := m.tabList()
+	for i, t := range tabs {
+		if t.t == m.active {
+			next := (i + delta + len(tabs)) % len(tabs)
+			return tabs[next].t
+		}
+	}
+	return m.active
 }
 
 func (m *Model) updateViewport() {
@@ -580,6 +597,9 @@ func (m Model) View() string {
 
 	// Footer
 	var footerParts []string
+	if !m.isIP {
+		footerParts = append(footerParts, "←→/⇥ tabs")
+	}
 	if m.viewport.TotalLineCount() > m.viewport.Height {
 		pct := fmt.Sprintf("%d%%", int(m.viewport.ScrollPercent()*100))
 		footerParts = append(footerParts, fmt.Sprintf("↑↓ scroll • %s", pct))

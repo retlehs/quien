@@ -125,9 +125,13 @@ func Lookup(domain string) (*Records, error) {
 	if rr, err := query(domain, mdns.TypeSOA, resolver); err == nil {
 		for _, r := range rr {
 			if soa, ok := r.(*mdns.SOA); ok {
+				admin, err := decodeRNAME(soa.Mbox)
+				if err != nil {
+					admin = strings.TrimSuffix(soa.Mbox, ".")
+				}
 				records.SOA = &SOARecord{
 					PrimaryNS:  strings.TrimSuffix(soa.Ns, "."),
-					AdminEmail: strings.TrimSuffix(soa.Mbox, "."),
+					AdminEmail: admin,
 					Serial:     soa.Serial,
 					Refresh:    soa.Refresh,
 					Retry:      soa.Retry,
@@ -193,4 +197,38 @@ func findResolver() string {
 	}
 	// Fallback to Cloudflare
 	return "1.1.1.1:53"
+}
+
+// decodeRNAME decodes a DNS SOA RNAME field to its original mailbox format.
+// The first unescaped dot separates the local-part from the domain.
+// Escaped dots (\.) in the local-part become literal dots in the email address.
+// This is a best-effort decoder; exotic escape sequences beyond \. are uncommon.
+func decodeRNAME(rname string) (string, error) {
+	rname = strings.TrimSuffix(rname, ".")
+
+	// Find the first unescaped dot. A dot is escaped only if preceded by an
+	// odd number of backslashes (e.g. \. is escaped, \\. is not).
+	boundary := -1
+	for i := 0; i < len(rname); i++ {
+		if rname[i] == '.' {
+			bs := 0
+			for j := i - 1; j >= 0 && rname[j] == '\\'; j-- {
+				bs++
+			}
+			if bs%2 == 0 {
+				boundary = i
+				break
+			}
+		}
+	}
+
+	if boundary <= 0 || boundary >= len(rname)-1 {
+		return "", fmt.Errorf("invalid RNAME: must contain both local-part and domain")
+	}
+
+	localPart := strings.ReplaceAll(rname[:boundary], "\\.", ".")
+	localPart = strings.ReplaceAll(localPart, "\\\\", "\\")
+	domain := rname[boundary+1:]
+
+	return localPart + "@" + domain, nil
 }

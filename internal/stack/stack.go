@@ -37,31 +37,17 @@ const (
 )
 
 func Detect(domain string) (*Result, error) {
-	client := &http.Client{
-		Timeout: timeout,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
-			DialContext:     (&net.Dialer{Timeout: 5 * time.Second}).DialContext,
-		},
-	}
-
-	resp, err := client.Get("https://" + domain)
-	if err != nil {
-		resp, err = client.Get("http://" + domain)
-		if err != nil {
-			return nil, err
-		}
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBodySize))
+	page, err := FetchPage(domain)
 	if err != nil {
 		return nil, err
 	}
+	return DetectFromPage(page.Headers, page.Body, domain), nil
+}
 
+// DetectFromPage runs stack detection on pre-fetched page data.
+func DetectFromPage(headers http.Header, body []byte, domain string) *Result {
 	html := string(body)
 	lower := strings.ToLower(html)
-	headers := resp.Header
 
 	r := &Result{}
 
@@ -84,7 +70,46 @@ func Detect(domain string) (*Result, error) {
 	sort.Strings(r.JSLibs)
 	sort.Strings(r.CSSLibs)
 
-	return r, nil
+	return r
+}
+
+// PageData holds the result of a page fetch.
+type PageData struct {
+	Headers http.Header
+	Body    []byte
+	BaseURL string // the URL that succeeded (https:// or http://)
+}
+
+// FetchPage fetches a domain's HTML page, trying HTTPS first with HTTP fallback.
+func FetchPage(domain string) (*PageData, error) {
+	client := &http.Client{
+		Timeout: timeout,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
+			DialContext:     (&net.Dialer{Timeout: 5 * time.Second}).DialContext,
+		},
+	}
+
+	baseURL := "https://" + domain
+	resp, err := client.Get(baseURL)
+	if err != nil {
+		baseURL = "http://" + domain
+		resp, err = client.Get(baseURL)
+		if err != nil {
+			return nil, err
+		}
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBodySize))
+	if err != nil {
+		return nil, err
+	}
+
+	// Use the final URL after redirects (e.g. example.com -> www.example.com)
+	finalURL := resp.Request.URL.Scheme + "://" + resp.Request.URL.Host
+
+	return &PageData{Headers: resp.Header, Body: body, BaseURL: finalURL}, nil
 }
 
 func detectCDN(r *Result, h http.Header) {
@@ -143,7 +168,7 @@ func detectCMS(r *Result, h http.Header, html string) {
 	// WordPress
 	if isWordPress(html) {
 		r.CMS = "WordPress"
-		if m := regexp.MustCompile(`content="wordpress\s*([\d.]+)?"`).FindStringSubmatch(html); len(m) > 1 && m[1] != "" {
+		if m := wpVersionRe.FindStringSubmatch(html); len(m) > 1 && m[1] != "" {
 			r.CMS = "WordPress " + m[1]
 		}
 		detectWPPlugins(r, html)
@@ -165,7 +190,7 @@ func detectCMS(r *Result, h http.Header, html string) {
 		return
 	}
 	// Ghost
-	if m := regexp.MustCompile(`content="ghost\s*([\d.]+)?"`).FindStringSubmatch(html); len(m) > 0 {
+	if m := ghostVersionRe.FindStringSubmatch(html); len(m) > 0 {
 		r.CMS = "Ghost"
 		if m[1] != "" {
 			r.CMS = "Ghost " + m[1]
@@ -178,12 +203,12 @@ func detectCMS(r *Result, h http.Header, html string) {
 		return
 	}
 	// Joomla
-	if strings.Contains(html, "/media/jui/") || regexp.MustCompile(`content="joomla`).MatchString(html) {
+	if strings.Contains(html, "/media/jui/") || joomlaRe.MatchString(html) {
 		r.CMS = "Joomla"
 		return
 	}
 	// Hugo
-	if regexp.MustCompile(`content="hugo`).MatchString(html) {
+	if hugoRe.MatchString(html) {
 		r.CMS = "Hugo"
 		return
 	}
@@ -345,8 +370,12 @@ func detectCSSLibs(r *Result, html string) {
 
 // parseExternalServices extracts external domains from script src and link href tags.
 var (
-	scriptSrcRe = regexp.MustCompile(`<script[^>]+src=["']([^"']+)["']`)
-	linkHrefRe  = regexp.MustCompile(`<link[^>]+href=["']([^"']+)["']`)
+	scriptSrcRe    = regexp.MustCompile(`<script[^>]+src=["']([^"']+)["']`)
+	linkHrefRe     = regexp.MustCompile(`<link[^>]+href=["']([^"']+)["']`)
+	wpVersionRe    = regexp.MustCompile(`content="wordpress\s*([\d.]+)?"`)
+	ghostVersionRe = regexp.MustCompile(`content="ghost\s*([\d.]+)?"`)
+	joomlaRe       = regexp.MustCompile(`content="joomla`)
+	hugoRe         = regexp.MustCompile(`content="hugo`)
 )
 
 func parseExternalServices(r *Result, html string, siteDomain string) {

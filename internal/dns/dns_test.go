@@ -113,3 +113,36 @@ func TestQueryUDPSuccessSkipsTCPFallback(t *testing.T) {
 		t.Fatalf("expected 1 answer, got %d", len(rr))
 	}
 }
+
+func TestDecodeRNAME(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       string
+		want        string
+		wantErr     bool
+		errContains string
+	}{
+		{"simple name", "name.domain.com.", "name@domain.com", false, ""},
+		{"escaped dots", "test\\.dot\\.period.domain.test.", "test.dot.period@domain.test", false, ""},
+		{"escaped backslash before dot", "test\\\\.domain.com.", "test\\@domain.com", false, ""},
+		{"missing @ separator", "nodotinname", "", true, "invalid RNAME: must contain both local-part and domain"},
+		{"empty input", "", "", true, "invalid RNAME: must contain both local-part and domain"},
+		{"single label", "singlelabel.", "", true, "invalid RNAME: must contain both local-part and domain"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := decodeRNAME(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("decodeRNAME(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+				return
+			}
+			if err != nil && tt.errContains != "" && err.Error() != tt.errContains {
+				t.Errorf("decodeRNAME(%q) error = %v, want error containing %q", tt.input, err, tt.errContains)
+			}
+			if got != tt.want {
+				t.Errorf("decodeRNAME(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}

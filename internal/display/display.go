@@ -3,6 +3,7 @@ package display
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -38,15 +39,37 @@ func SetWidth(w int) {
 	displayWidth = w
 }
 
+func init() {
+	switch strings.ToLower(os.Getenv("QUIEN_THEME")) {
+	case "light":
+		lipgloss.SetHasDarkBackground(false)
+	case "dark":
+		lipgloss.SetHasDarkBackground(true)
+	}
+	// "auto" or unset: lipgloss detects automatically.
+}
+
+// ac returns an AdaptiveColor that picks light on light backgrounds and dark
+// on dark backgrounds. lipgloss detects the terminal background automatically.
+func ac(light, dark string) lipgloss.AdaptiveColor {
+	return lipgloss.AdaptiveColor{Light: light, Dark: dark}
+}
+
 var (
-	// Colors
-	cyan   = lipgloss.Color("#00D7FF")
-	green  = lipgloss.Color("#00FF87")
-	red    = lipgloss.Color("#FF5F87")
-	yellow = lipgloss.Color("#FFD700")
-	dim    = lipgloss.Color("#6C6C6C")
-	white  = lipgloss.Color("#FFFFFF")
-	faint  = lipgloss.Color("#4E4E4E")
+	// Colors — dark values are unchanged; light values target white/light backgrounds.
+	cyan   = ac("#0969DA", "#00D7FF")
+	green  = ac("#1A7F37", "#00FF87")
+	red    = ac("#CF222E", "#FF5F87")
+	yellow = ac("#9A6700", "#FFD700")
+	dim    = ac("#57606A", "#6C6C6C")
+	white  = ac("#1F2328", "#FFFFFF") // main body text
+	faint  = ac("#8C959F", "#4E4E4E")
+
+	// Secondary palette tokens used across multiple files.
+	accent  = ac("#2E59A1", "#87AFFF") // nameservers, headers, DNS records
+	muted   = ac("#57606A", "#A8A8A8") // TXT records, redirect URLs, mail records
+	border  = ac("#D0D7DE", "#3A3A3A") // box and panel borders
+	tabGray = ac("#57606A", "#A0A0A0") // inactive tab text
 
 	// Styles
 	domainStyle = lipgloss.NewStyle().
@@ -73,10 +96,10 @@ var (
 			Italic(true)
 
 	nsStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#87AFFF"))
+		Foreground(accent)
 
 	txtStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#A8A8A8"))
+			Foreground(muted)
 
 	dimStyle = lipgloss.NewStyle().
 			Foreground(dim)
@@ -88,7 +111,7 @@ var (
 func box() lipgloss.Style {
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#3A3A3A")).
+		BorderForeground(border).
 		Padding(1, boxPadH).
 		Width(displayWidth)
 }

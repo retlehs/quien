@@ -11,7 +11,7 @@ import (
 var (
 	foundStyle    = lipgloss.NewStyle().Foreground(green)
 	notFoundStyle = lipgloss.NewStyle().Foreground(red)
-	recordStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#A8A8A8"))
+	recordStyle   = lipgloss.NewStyle().Foreground(muted)
 )
 
 // RenderMail returns a lipgloss-styled string for email-related DNS records.

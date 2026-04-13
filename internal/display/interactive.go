@@ -41,7 +41,7 @@ var (
 			PaddingLeft(2)
 
 	tabStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#A0A0A0")).
+			Foreground(tabGray).
 			PaddingRight(2)
 
 	tabKeyStyle = lipgloss.NewStyle().
@@ -63,8 +63,7 @@ var (
 			Foreground(dim).
 			PaddingLeft(2)
 
-	borderColor = lipgloss.Color("#3A3A3A")
-	borderFg    = lipgloss.NewStyle().Foreground(borderColor)
+	borderFg = lipgloss.NewStyle().Foreground(border)
 )
 
 // chrome = tab bar (1) + top border (1) + bottom border (1) + footer (1)

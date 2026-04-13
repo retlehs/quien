@@ -79,7 +79,7 @@ func (m PromptModel) View() string {
 		return ""
 	}
 
-	underline := lipgloss.NewStyle().Foreground(lipgloss.Color("#555555"))
+	underline := lipgloss.NewStyle().Foreground(ac("#AAAAAA", "#555555"))
 
 	var content strings.Builder
 	content.WriteString(promptTitleStyle.Render("quien"))
@@ -92,7 +92,7 @@ func (m PromptModel) View() string {
 
 	outerBox := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#3A3A3A")).
+		BorderForeground(border).
 		Padding(1, 3).
 		Width(50)
 

@@ -83,6 +83,16 @@ The CrUX API is free. Not all domains have field data — a site needs enough Ch
 
 </details>
 
+## Theme
+
+quien automatically detects your terminal background and picks light or dark colors. If detection gets it wrong (common in tmux, screen, or remote shells), override it:
+
+```sh
+export QUIEN_THEME=light  # force light palette
+export QUIEN_THEME=dark   # force dark palette
+export QUIEN_THEME=auto   # auto-detect (default)
+```
+
 > [!TIP]
 > If you want `quien` to replace your default WHOIS tool, you can add an alias to your shell config:
 > ```sh

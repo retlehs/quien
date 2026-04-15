@@ -79,6 +79,9 @@ type Model struct {
 	whoisErr     error
 	dnsData      *dns.Records
 	mailData     *mail.Records
+	mxResolved   []mail.MXResolution
+	mxExpanded   bool
+	mxResolving  bool
 	tlsData      *tlsinfo.CertInfo
 	httpData     *httpinfo.Result
 	stackData    *stack.Result
@@ -121,6 +124,10 @@ type dnsResultMsg struct {
 type mailResultMsg struct {
 	records *mail.Records
 	err     error
+}
+
+type mxResolveMsg struct {
+	resolutions []mail.MXResolution
 }
 
 type tlsResultMsg struct {
@@ -262,6 +269,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.updateViewport()
 				return m, resolveFirstIP(m.domain)
 			}
+			if !m.isIP && m.active == tabMail && m.mailData != nil && len(m.mailData.MX) > 0 {
+				if m.mxResolved != nil {
+					m.mxExpanded = !m.mxExpanded
+					m.updateViewport()
+					return m, nil
+				}
+				if !m.mxResolving {
+					m.mxResolving = true
+					m.mxExpanded = true
+					m.updateViewport()
+					hosts := make([]string, len(m.mailData.MX))
+					for i, mx := range m.mailData.MX {
+						hosts[i] = mx.Host
+					}
+					return m, resolveMX(hosts)
+				}
+			}
 		default:
 			key := msg.String()
 			for _, t := range m.tabList() {
@@ -302,6 +326,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.ipInfo = msg.info
 		}
+		m.updateViewport()
+		return m, nil
+
+	case mxResolveMsg:
+		m.mxResolving = false
+		m.mxResolved = msg.resolutions
 		m.updateViewport()
 		return m, nil
 
@@ -495,7 +525,11 @@ func (m Model) contentForTab(t tab) string {
 		} else if m.mailErr != nil {
 			return errorBox("Mail Lookup Failed", m.mailErr)
 		} else if m.mailData != nil {
-			return RenderMail(m.mailData)
+			var res []mail.MXResolution
+			if m.mxExpanded {
+				res = m.mxResolved
+			}
+			return RenderMail(m.mailData, res)
 		}
 	case tabDNS:
 		if m.loading {
@@ -615,6 +649,15 @@ func (m Model) View() string {
 		footerParts = append(footerParts, "i failed")
 	} else if !m.isIP && m.active == tabWhois {
 		footerParts = append(footerParts, "i inspect ip")
+	} else if !m.isIP && m.active == tabMail && m.mailData != nil && len(m.mailData.MX) > 0 {
+		switch {
+		case m.mxResolving:
+			footerParts = append(footerParts, "i resolving...")
+		case m.mxExpanded:
+			footerParts = append(footerParts, "i collapse")
+		default:
+			footerParts = append(footerParts, "i resolve mx")
+		}
 	}
 	if m.isIP && m.prevDomain != "" {
 		footerParts = append(footerParts, "esc/w back")
@@ -737,6 +780,12 @@ func fetchWhois(domain string) tea.Cmd {
 	return func() tea.Msg {
 		info, err := resolver.Lookup(domain)
 		return whoisResultMsg{info: info, err: err}
+	}
+}
+
+func resolveMX(hosts []string) tea.Cmd {
+	return func() tea.Msg {
+		return mxResolveMsg{resolutions: mail.ResolveMX(hosts)}
 	}
 }
 

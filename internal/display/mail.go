@@ -15,11 +15,17 @@ var (
 )
 
 // RenderMail returns a lipgloss-styled string for email-related DNS records.
-func RenderMail(records *mail.Records) string {
+// mxResolutions (optional) adds expanded IP/rDNS info under each MX host.
+func RenderMail(records *mail.Records, mxResolutions []mail.MXResolution) string {
 	var b strings.Builder
 
 	b.WriteString(domainSectionTitle("Mail Configuration"))
 	b.WriteString("\n\n")
+
+	resolutionByHost := map[string]mail.MXResolution{}
+	for _, r := range mxResolutions {
+		resolutionByHost[r.Host] = r
+	}
 
 	// MX Records
 	b.WriteString(section("MX Records"))
@@ -27,6 +33,19 @@ func RenderMail(records *mail.Records) string {
 		for _, mx := range records.MX {
 			pri := dimStyle.Render(fmt.Sprintf("(%d)", mx.Priority))
 			b.WriteString(row("", nsStyle.Render(mx.Host)+" "+pri))
+			if res, ok := resolutionByHost[mx.Host]; ok {
+				if res.Err != "" {
+					b.WriteString(row("", dimStyle.Render("  "+notFoundStyle.Render(res.Err))))
+				} else {
+					for _, ip := range res.IPs {
+						line := recordStyle.Render("  " + ip.IP)
+						if ip.PTR != "" {
+							line += "  " + dimStyle.Render("("+ip.PTR+")")
+						}
+						b.WriteString(row("", line))
+					}
+				}
+			}
 		}
 	} else {
 		b.WriteString(row("", notFoundStyle.Render("No MX records found")))

@@ -8,12 +8,14 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/retlehs/quien/internal/display"
+	"github.com/retlehs/quien/internal/dnsutil"
 	"github.com/retlehs/quien/internal/resolver"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
 
 var jsonFlag bool
+var resolverFlag string
 
 var rootCmd = &cobra.Command{
 	Use:          "quien [domain or IP]",
@@ -21,6 +23,25 @@ var rootCmd = &cobra.Command{
 	Long:         "quien queries WHOIS/RDAP information for a domain or IP address and displays it in a clean, readable format.",
 	Args:         cobra.MaximumNArgs(1),
 	SilenceUsage: true,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		if resolverFlag != "" {
+			normalized, err := dnsutil.NormalizeResolver(resolverFlag)
+			if err != nil {
+				return fmt.Errorf("invalid --resolver: %w", err)
+			}
+			return os.Setenv(dnsutil.ResolverEnvVar, normalized)
+		}
+
+		if envResolver := strings.TrimSpace(os.Getenv(dnsutil.ResolverEnvVar)); envResolver != "" {
+			normalized, err := dnsutil.NormalizeResolver(envResolver)
+			if err != nil {
+				return fmt.Errorf("invalid %s: %w", dnsutil.ResolverEnvVar, err)
+			}
+			return os.Setenv(dnsutil.ResolverEnvVar, normalized)
+		}
+
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// No args — show interactive prompt
 		if len(args) == 0 {
@@ -105,6 +126,7 @@ func runLookup(input string, isIP bool) error {
 
 func init() {
 	rootCmd.Flags().BoolVar(&jsonFlag, "json", false, "output as JSON")
+	rootCmd.PersistentFlags().StringVar(&resolverFlag, "resolver", "", "DNS resolver to use for DNS/mail lookups (host or host:port). Overrides "+dnsutil.ResolverEnvVar)
 }
 
 func Execute(version, commit, date string) {

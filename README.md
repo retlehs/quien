@@ -33,6 +33,20 @@ yay -S quien
 go install github.com/retlehs/quien@latest
 ```
 
+## Features
+
+- **RDAP-first lookups** with WHOIS fallback for broad TLD coverage
+- **IANA referral** for automatic WHOIS server discovery
+- **Mail configuration audit** — MX, SPF, DMARC, DKIM, and BIMI with VMC chain validation
+- **SEO analysis** — indexability (robots.txt, canonical, sitemap), on-page (title, description, headings, images), structured data (JSON-LD, Open Graph, Twitter Cards), and performance hints (compression, caching, render-blocking resources)
+- **Core Web Vitals** — LCP, INP, CLS, FCP, and TTFB field data with historical trends via the CrUX API (optional)
+- **Tech stack detection** including WordPress plugins, JS/CSS frameworks, and external services parsed from HTML
+- **IP lookups** with reverse DNS, network info, abuse contacts, and ASN discovery via RDAP
+- **BGP fallback** for origin ASN/prefix when RDAP does not include ASN data
+- **PeeringDB enrichment** for ASN context (network/org, peering policy, peering locations, traffic profile, IX/facility counts)
+- **Automatic retry** with exponential backoff on all lookups
+- **JSON subcommands** for scripting: `quien dns`, `quien mail`, `quien tls`, `quien http`, `quien seo`, `quien stack`, `quien all`
+
 ## Usage
 
 ```
@@ -47,21 +61,15 @@ quien 8.8.8.8
 
 # JSON output
 quien --json example.com
+
+# Use a specific DNS resolver for this run
+quien mail example.com --resolver 9.9.9.9
+
+# Set a default resolver via environment variable
+QUIEN_RESOLVER=1.1.1.1 quien dns example.com
 ```
 
-## Features
-
-- **RDAP-first lookups** with WHOIS fallback for broad TLD coverage
-- **IANA referral** for automatic WHOIS server discovery
-- **Mail configuration audit** — MX, SPF, DMARC, DKIM, and BIMI with VMC chain validation
-- **SEO analysis** — indexability (robots.txt, canonical, sitemap), on-page (title, description, headings, images), structured data (JSON-LD, Open Graph, Twitter Cards), and performance hints (compression, caching, render-blocking resources)
-- **Core Web Vitals** — LCP, INP, CLS, FCP, and TTFB field data with historical trends via the CrUX API (optional)
-- **Tech stack detection** including WordPress plugins, JS/CSS frameworks, and external services parsed from HTML
-- **IP lookups** with reverse DNS, network info, abuse contacts, and ASN discovery via RDAP
-- **BGP fallback** for origin ASN/prefix when RDAP does not include ASN data
-- **PeeringDB enrichment** for ASN context (network/org, peering policy, peering locations, traffic profile, IX/facility counts)
-- **Automatic retry** with exponential backoff on all lookups
-- **JSON subcommands** for scripting: `quien dns`, `quien mail`, `quien tls`, `quien http`, `quien seo`, `quien stack`, `quien all`
+Resolver precedence: `--resolver` > `QUIEN_RESOLVER` > system resolver.
 
 ## Core Web Vitals
 
@@ -97,6 +105,16 @@ quien automatically detects your terminal background and picks light or dark col
 export QUIEN_THEME=light  # force light palette
 export QUIEN_THEME=dark   # force dark palette
 export QUIEN_THEME=auto   # auto-detect (default)
+```
+
+## Troubleshooting DNS
+
+If your system resolver is unreliable (common in WSL, VPN, or container setups), force a resolver:
+
+```sh
+quien mail example.com --resolver 9.9.9.9
+# or
+export QUIEN_RESOLVER=9.9.9.9
 ```
 
 > [!TIP]

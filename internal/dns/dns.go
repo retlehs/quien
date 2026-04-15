@@ -2,12 +2,12 @@ package dns
 
 import (
 	"fmt"
-	"net"
 	"sort"
 	"strings"
 	"time"
 
 	mdns "github.com/miekg/dns"
+	"github.com/retlehs/quien/internal/dnsutil"
 )
 
 type Records struct {
@@ -190,13 +190,7 @@ func reverseLookup(ip string, resolver string) string {
 }
 
 func findResolver() string {
-	// Try to read system resolver
-	config, err := mdns.ClientConfigFromFile("/etc/resolv.conf")
-	if err == nil && len(config.Servers) > 0 {
-		return net.JoinHostPort(config.Servers[0], config.Port)
-	}
-	// Fallback to Cloudflare
-	return "1.1.1.1:53"
+	return dnsutil.FindResolver()
 }
 
 // decodeRNAME decodes a DNS SOA RNAME field to its original mailbox format.

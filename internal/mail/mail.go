@@ -10,6 +10,7 @@ import (
 	"time"
 
 	mdns "github.com/miekg/dns"
+	"github.com/retlehs/quien/internal/dnsutil"
 )
 
 type Records struct {
@@ -227,9 +228,5 @@ func query(name string, qtype uint16, resolver string) ([]mdns.RR, error) {
 }
 
 func findResolver() string {
-	config, err := mdns.ClientConfigFromFile("/etc/resolv.conf")
-	if err == nil && len(config.Servers) > 0 {
-		return net.JoinHostPort(config.Servers[0], config.Port)
-	}
-	return "1.1.1.1:53"
+	return dnsutil.FindResolver()
 }

@@ -9,9 +9,10 @@ import (
 )
 
 var tlsCmd = &cobra.Command{
-	Use:   "tls <domain>",
-	Short: "SSL/TLS certificate lookup (JSON output)",
-	Args:  cobra.ExactArgs(1),
+	Use:     "tls <domain>",
+	Aliases: []string{"ssl"},
+	Short:   "SSL/TLS certificate lookup (JSON output)",
+	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		domain := normalizeDomain(args[0])
 		cert, err := retry.Do(func() (*tlsinfo.CertInfo, error) {

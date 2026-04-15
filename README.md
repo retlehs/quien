@@ -45,7 +45,7 @@ go install github.com/retlehs/quien@latest
 - **BGP fallback** for origin ASN/prefix when RDAP does not include ASN data
 - **PeeringDB enrichment** for ASN context (network/org, peering policy, peering locations, traffic profile, IX/facility counts)
 - **Automatic retry** with exponential backoff on all lookups
-- **JSON subcommands** for scripting: `quien dns`, `quien mail`, `quien tls`, `quien http`, `quien seo`, `quien stack`, `quien all`
+- **JSON subcommands** for scripting: `quien whois`, `quien dns`, `quien mail`, `quien tls`, `quien http`, `quien seo`, `quien stack`, `quien all`
 
 ## Usage
 
@@ -61,6 +61,16 @@ quien 8.8.8.8
 
 # JSON output
 quien --json example.com
+
+# Commands
+quien whois example.com
+quien dns example.com
+quien mail example.com
+quien tls example.com
+quien http example.com
+quien stack example.com
+quien seo example.com
+quien all example.com
 
 # Use a specific DNS resolver for this run
 quien mail example.com --resolver 9.9.9.9

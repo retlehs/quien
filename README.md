@@ -62,7 +62,7 @@ quien 8.8.8.8
 # JSON output
 quien --json example.com
 
-# Commands
+# JSON subcommands
 quien whois example.com
 quien dns example.com
 quien mail example.com

@@ -1,10 +1,12 @@
 package mail
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	mdns "github.com/miekg/dns"
@@ -147,6 +149,57 @@ func Lookup(domain string) (*Records, error) {
 	}
 
 	return records, nil
+}
+
+// MXResolution pairs an MX host with its resolved IP addresses (and reverse DNS).
+type MXResolution struct {
+	Host string
+	IPs  []MXIP
+	Err  string
+}
+
+type MXIP struct {
+	IP  string
+	PTR string
+}
+
+// ResolveMX looks up A/AAAA records and reverse DNS for each MX host concurrently.
+func ResolveMX(hosts []string) []MXResolution {
+	out := make([]MXResolution, len(hosts))
+	var wg sync.WaitGroup
+	for i, h := range hosts {
+		wg.Add(1)
+		go func(i int, host string) {
+			defer wg.Done()
+			out[i].Host = host
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
+			defer cancel()
+			addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+			if err != nil {
+				out[i].Err = err.Error()
+				return
+			}
+			ips := make([]MXIP, len(addrs))
+			var inner sync.WaitGroup
+			for j, a := range addrs {
+				ips[j].IP = a.IP.String()
+				inner.Add(1)
+				go func(j int, ip string) {
+					defer inner.Done()
+					rctx, rcancel := context.WithTimeout(context.Background(), timeout)
+					defer rcancel()
+					names, err := net.DefaultResolver.LookupAddr(rctx, ip)
+					if err == nil && len(names) > 0 {
+						ips[j].PTR = strings.TrimSuffix(names[0], ".")
+					}
+				}(j, ips[j].IP)
+			}
+			inner.Wait()
+			out[i].IPs = ips
+		}(i, h)
+	}
+	wg.Wait()
+	return out
 }
 
 func query(name string, qtype uint16, resolver string) ([]mdns.RR, error) {

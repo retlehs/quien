@@ -167,6 +167,7 @@ type MXIP struct {
 // ResolveMX looks up A/AAAA records and reverse DNS for each MX host concurrently.
 func ResolveMX(hosts []string) []MXResolution {
 	out := make([]MXResolution, len(hosts))
+	resolver := resolverForMX()
 	var wg sync.WaitGroup
 	for i, h := range hosts {
 		wg.Add(1)
@@ -175,7 +176,7 @@ func ResolveMX(hosts []string) []MXResolution {
 			out[i].Host = host
 			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			defer cancel()
-			addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+			addrs, err := resolver.LookupIPAddr(ctx, host)
 			if err != nil {
 				out[i].Err = err.Error()
 				return
@@ -189,7 +190,7 @@ func ResolveMX(hosts []string) []MXResolution {
 					defer inner.Done()
 					rctx, rcancel := context.WithTimeout(context.Background(), timeout)
 					defer rcancel()
-					names, err := net.DefaultResolver.LookupAddr(rctx, ip)
+					names, err := resolver.LookupAddr(rctx, ip)
 					if err == nil && len(names) > 0 {
 						ips[j].PTR = strings.TrimSuffix(names[0], ".")
 					}
@@ -201,6 +202,20 @@ func ResolveMX(hosts []string) []MXResolution {
 	}
 	wg.Wait()
 	return out
+}
+
+func resolverForMX() *net.Resolver {
+	target := findResolver()
+	dialer := &net.Dialer{Timeout: timeout}
+	return &net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			if strings.HasPrefix(network, "tcp") {
+				return dialer.DialContext(ctx, "tcp", target)
+			}
+			return dialer.DialContext(ctx, "udp", target)
+		},
+	}
 }
 
 func query(name string, qtype uint16, resolver string) ([]mdns.RR, error) {

@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/retlehs/quien/internal/dns"
+	"github.com/retlehs/quien/internal/dnsutil"
 	"github.com/retlehs/quien/internal/httpinfo"
 	"github.com/retlehs/quien/internal/mail"
 	"github.com/retlehs/quien/internal/model"
@@ -267,7 +268,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.resolvingIP = true
 				m.loading = true
 				m.updateViewport()
-				return m, resolveFirstIP(m.domain)
+				return m, resolveFirstIP(m.domain, m.dnsData)
 			}
 			if !m.isIP && m.active == tabMail && m.mailData != nil && len(m.mailData.MX) > 0 {
 				if m.mxResolved != nil {
@@ -737,25 +738,74 @@ func fetchIP(ip string) tea.Cmd {
 	}
 }
 
-func resolveFirstIP(domain string) tea.Cmd {
+func resolveFirstIP(domain string, cached *dns.Records) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		ips, err := net.DefaultResolver.LookupIPAddr(ctx, domain)
+		ip, err := resolveFirstIPValue(domain, cached, ipLookupDeps{
+			lookupDNSIPs: dns.LookupIPAddrs,
+			lookupIPAddr: lookupIPAddrViaConfiguredResolver,
+		})
 		if err != nil {
 			return resolveIPResultMsg{err: err}
 		}
-		if len(ips) == 0 {
-			return resolveIPResultMsg{err: fmt.Errorf("no IP found for %s", domain)}
-		}
-
-		for _, ip := range ips {
-			if v4 := ip.IP.To4(); v4 != nil {
-				return resolveIPResultMsg{ip: v4.String()}
-			}
-		}
-		return resolveIPResultMsg{ip: ips[0].IP.String()}
+		return resolveIPResultMsg{ip: ip}
 	}
+}
+
+type ipLookupDeps struct {
+	lookupDNSIPs func(domain string) ([]string, []string, error)
+	lookupIPAddr func(ctx context.Context, domain string) ([]net.IPAddr, error)
+}
+
+func resolveFirstIPValue(domain string, cached *dns.Records, deps ipLookupDeps) (string, error) {
+	if ip := firstIPFromDNSRecords(cached); ip != "" {
+		return ip, nil
+	}
+
+	a, aaaa, err := deps.lookupDNSIPs(domain)
+	if err == nil {
+		if ip := firstIPFromSlices(a, aaaa); ip != "" {
+			return ip, nil
+		}
+		return "", fmt.Errorf("no IP found for %s", domain)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	ips, err := deps.lookupIPAddr(ctx, domain)
+	if err != nil {
+		return "", err
+	}
+	if len(ips) == 0 {
+		return "", fmt.Errorf("no IP found for %s", domain)
+	}
+
+	for _, ip := range ips {
+		if v4 := ip.IP.To4(); v4 != nil {
+			return v4.String(), nil
+		}
+	}
+	return ips[0].IP.String(), nil
+}
+
+func firstIPFromDNSRecords(records *dns.Records) string {
+	if records == nil {
+		return ""
+	}
+	return firstIPFromSlices(records.A, records.AAAA)
+}
+
+func firstIPFromSlices(a []string, aaaa []string) string {
+	if len(a) > 0 && a[0] != "" {
+		return a[0]
+	}
+	if len(aaaa) > 0 && aaaa[0] != "" {
+		return aaaa[0]
+	}
+	return ""
+}
+
+func lookupIPAddrViaConfiguredResolver(ctx context.Context, domain string) ([]net.IPAddr, error) {
+	return dnsutil.GoResolver(5*time.Second).LookupIPAddr(ctx, domain)
 }
 
 func (m Model) viewportSize() (int, int) {

@@ -1,11 +1,13 @@
 package dnsutil
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	mdns "github.com/miekg/dns"
 )
@@ -68,4 +70,20 @@ func FindResolver() string {
 	}
 
 	return "1.1.1.1:53"
+}
+
+// GoResolver returns a net.Resolver that bypasses local NSS/files and dials the
+// configured DNS server directly.
+func GoResolver(timeout time.Duration) *net.Resolver {
+	target := FindResolver()
+	dialer := &net.Dialer{Timeout: timeout}
+	return &net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			if strings.HasPrefix(network, "tcp") {
+				return dialer.DialContext(ctx, "tcp", target)
+			}
+			return dialer.DialContext(ctx, "udp", target)
+		},
+	}
 }

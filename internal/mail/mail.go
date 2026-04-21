@@ -205,17 +205,7 @@ func ResolveMX(hosts []string) []MXResolution {
 }
 
 func resolverForMX() *net.Resolver {
-	target := findResolver()
-	dialer := &net.Dialer{Timeout: timeout}
-	return &net.Resolver{
-		PreferGo: true,
-		Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
-			if strings.HasPrefix(network, "tcp") {
-				return dialer.DialContext(ctx, "tcp", target)
-			}
-			return dialer.DialContext(ctx, "udp", target)
-		},
-	}
+	return dnsutil.GoResolver(timeout)
 }
 
 func query(name string, qtype uint16, resolver string) ([]mdns.RR, error) {

@@ -44,6 +44,38 @@ type SOARecord struct {
 
 const timeout = 5 * time.Second
 
+// LookupIPAddrs queries only A and AAAA records for the given domain.
+func LookupIPAddrs(domain string) (a []string, aaaa []string, err error) {
+	if !strings.HasSuffix(domain, ".") {
+		domain = domain + "."
+	}
+
+	resolver := findResolver()
+	aRR, aErr := query(domain, mdns.TypeA, resolver)
+	if aErr == nil {
+		for _, r := range aRR {
+			if rec, ok := r.(*mdns.A); ok {
+				a = append(a, rec.A.String())
+			}
+		}
+	}
+
+	aaaaRR, aaaaErr := query(domain, mdns.TypeAAAA, resolver)
+	if aaaaErr == nil {
+		for _, r := range aaaaRR {
+			if rec, ok := r.(*mdns.AAAA); ok {
+				aaaa = append(aaaa, rec.AAAA.String())
+			}
+		}
+	}
+
+	if aErr != nil && aaaaErr != nil {
+		return nil, nil, fmt.Errorf("a lookup failed: %v; aaaa lookup failed: %v", aErr, aaaaErr)
+	}
+
+	return a, aaaa, nil
+}
+
 // Lookup queries common DNS record types for the given domain.
 func Lookup(domain string) (*Records, error) {
 	// Ensure domain has trailing dot for DNS queries

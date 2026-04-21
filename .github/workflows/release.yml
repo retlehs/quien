@@ -264,3 +264,11 @@ jobs:
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
           commit_message: "Update to ${{ github.ref_name }}"
           ssh_keyscan_types: rsa,ecdsa,ed25519
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+
+      - name: Bump flake version
+        run: |
+          nix run github:Mic92/nix-update -- --version $VERSION --flake --commit quien
+          git push

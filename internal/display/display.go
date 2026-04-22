@@ -7,7 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2/compat"
 	"github.com/retlehs/quien/internal/model"
 )
 
@@ -42,17 +43,17 @@ func SetWidth(w int) {
 func init() {
 	switch strings.ToLower(os.Getenv("QUIEN_THEME")) {
 	case "light":
-		lipgloss.SetHasDarkBackground(false)
+		compat.HasDarkBackground = false
 	case "dark":
-		lipgloss.SetHasDarkBackground(true)
+		compat.HasDarkBackground = true
 	}
-	// "auto" or unset: lipgloss detects automatically.
+	// "auto" or unset: compat detects automatically.
 }
 
 // ac returns an AdaptiveColor that picks light on light backgrounds and dark
-// on dark backgrounds. lipgloss detects the terminal background automatically.
-func ac(light, dark string) lipgloss.AdaptiveColor {
-	return lipgloss.AdaptiveColor{Light: light, Dark: dark}
+// on dark backgrounds. compat detects the terminal background automatically.
+func ac(light, dark string) compat.AdaptiveColor {
+	return compat.AdaptiveColor{Light: lipgloss.Color(light), Dark: lipgloss.Color(dark)}
 }
 
 var (

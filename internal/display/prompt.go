@@ -4,10 +4,10 @@ import (
 	"net"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	"charm.land/lipgloss/v2"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 var (
@@ -36,10 +36,15 @@ func NewPromptModel() PromptModel {
 	ti.Placeholder = "example.com or 8.8.8.8"
 	ti.Focus()
 	ti.CharLimit = 253
-	ti.Width = 40
-	ti.PromptStyle = promptLabelStyle
-	ti.TextStyle = promptInputStyle
+	ti.SetWidth(40)
 	ti.Prompt = "  "
+
+	s := ti.Styles()
+	s.Focused.Prompt = promptLabelStyle
+	s.Focused.Text = promptInputStyle
+	s.Blurred.Prompt = promptLabelStyle
+	s.Blurred.Text = promptInputStyle
+	ti.SetStyles(s)
 
 	return PromptModel{
 		textInput: ti,
@@ -52,7 +57,7 @@ func (m PromptModel) Init() tea.Cmd {
 
 func (m PromptModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "ctrl+c", "esc":
 			m.quitting = true
@@ -74,9 +79,9 @@ func (m PromptModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m PromptModel) View() string {
+func (m PromptModel) View() tea.View {
 	if m.quitting || m.submitted {
-		return ""
+		return tea.NewView("")
 	}
 
 	underline := lipgloss.NewStyle().Foreground(ac("#AAAAAA", "#555555"))
@@ -98,7 +103,7 @@ func (m PromptModel) View() string {
 
 	footer := promptLabelStyle.Render("  enter to look up • esc to quit")
 
-	return "\n" + outerBox.Render(content.String()) + "\n" + footer + "\n"
+	return tea.NewView("\n" + outerBox.Render(content.String()) + "\n" + footer + "\n")
 }
 
 // Result returns the submitted input and whether it's an IP.

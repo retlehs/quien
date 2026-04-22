@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/retlehs/quien/internal/display"
 	"github.com/retlehs/quien/internal/dnsutil"
 	"github.com/retlehs/quien/internal/resolver"
@@ -100,7 +100,7 @@ func runLookup(input string, isIP bool) error {
 		} else {
 			m = display.NewModel(input)
 		}
-		p := tea.NewProgram(m, tea.WithAltScreen())
+		p := tea.NewProgram(m)
 		if _, err := p.Run(); err != nil {
 			return fmt.Errorf("interactive mode failed: %w", err)
 		}

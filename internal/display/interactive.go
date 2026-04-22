@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/viewport"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/spinner"
+	"charm.land/bubbles/v2/viewport"
+	"charm.land/lipgloss/v2"
 	"github.com/retlehs/quien/internal/dns"
 	"github.com/retlehs/quien/internal/dnsutil"
 	"github.com/retlehs/quien/internal/httpinfo"
@@ -22,7 +22,7 @@ import (
 	"github.com/retlehs/quien/internal/stack"
 	"github.com/retlehs/quien/internal/tlsinfo"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 type tab int
@@ -201,16 +201,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		vpWidth, vpHeight := m.viewportSize()
 
 		if !m.ready {
-			m.viewport = viewport.New(vpWidth, vpHeight)
+			m.viewport = viewport.New(viewport.WithWidth(vpWidth), viewport.WithHeight(vpHeight))
 			m.viewport.SetContent(m.contentForTab(m.active))
 			m.ready = true
 		} else {
-			m.viewport.Width = vpWidth
-			m.viewport.Height = vpHeight
+			m.viewport.SetWidth(vpWidth)
+			m.viewport.SetHeight(vpHeight)
 		}
 		return m, nil
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if m.loading {
 			if msg.String() == "q" || msg.String() == "esc" || msg.String() == "ctrl+c" {
 				m.quitting = true
@@ -576,12 +576,14 @@ func (m Model) contentForTab(t tab) string {
 	return ""
 }
 
-func (m Model) View() string {
+func (m Model) View() tea.View {
 	if m.quitting {
-		return ""
+		return tea.NewView("")
 	}
 	if !m.ready {
-		return "\n  Loading..."
+		v := tea.NewView("\n  Loading...")
+		v.AltScreen = true
+		return v
 	}
 
 	boxWidth := displayWidth
@@ -613,7 +615,7 @@ func (m Model) View() string {
 	vpView := m.viewport.View()
 	vpLines := strings.Split(vpView, "\n")
 
-	vpHeight := m.viewport.Height
+	vpHeight := m.viewport.Height()
 	for i := 0; i < vpHeight; i++ {
 		line := ""
 		if i < len(vpLines) {
@@ -635,7 +637,7 @@ func (m Model) View() string {
 	if !m.isIP {
 		footerParts = append(footerParts, "←→/⇥ tabs")
 	}
-	if m.viewport.TotalLineCount() > m.viewport.Height {
+	if m.viewport.TotalLineCount() > m.viewport.Height() {
 		pct := fmt.Sprintf("%d%%", int(m.viewport.ScrollPercent()*100))
 		footerParts = append(footerParts, fmt.Sprintf("↑↓ scroll • %s", pct))
 	}
@@ -666,7 +668,9 @@ func (m Model) View() string {
 	footerParts = append(footerParts, "q quit")
 	b.WriteString(footerStyle.Render(strings.Join(footerParts, "  •  ")))
 
-	return b.String()
+	v := tea.NewView(b.String())
+	v.AltScreen = true
+	return v
 }
 
 func (m Model) tabList() []struct {
@@ -822,8 +826,8 @@ func (m Model) viewportSize() (int, int) {
 
 func (m *Model) applyViewportSize() {
 	vpWidth, vpHeight := m.viewportSize()
-	m.viewport.Width = vpWidth
-	m.viewport.Height = vpHeight
+	m.viewport.SetWidth(vpWidth)
+	m.viewport.SetHeight(vpHeight)
 }
 
 func fetchWhois(domain string) tea.Cmd {

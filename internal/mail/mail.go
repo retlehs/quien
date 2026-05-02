@@ -14,11 +14,12 @@ import (
 )
 
 type Records struct {
-	MX    []MXRecord
-	SPF   string
-	DMARC string
-	DKIM  []DKIMRecord
-	BIMI  *BIMIRecord `json:",omitempty"`
+	MX          []MXRecord
+	SPF         string
+	SPFAnalysis *SPFAnalysis `json:",omitempty"`
+	DMARC       string
+	DKIM        []DKIMRecord
+	BIMI        *BIMIRecord `json:",omitempty"`
 }
 
 type MXRecord struct {
@@ -89,17 +90,14 @@ func Lookup(domain string) (*Records, error) {
 		})
 	}
 
-	// SPF — look for "v=spf1" in TXT records
-	if rr, err := query(domain+".", mdns.TypeTXT, resolver); err == nil {
-		for _, r := range rr {
-			if txt, ok := r.(*mdns.TXT); ok {
-				val := strings.Join(txt.Txt, "")
-				if strings.HasPrefix(strings.ToLower(val), "v=spf1") {
-					records.SPF = val
-					break
-				}
-			}
-		}
+	// SPF — analyze and walk include/redirect chain. AnalyzeSPF collects all
+	// v=spf1 records at the root so multi-record (PermError) is detected.
+	analysis := AnalyzeSPF(domain, nil)
+	if len(analysis.Records) > 0 {
+		records.SPF = analysis.Records[0]
+		records.SPFAnalysis = analysis
+	} else if len(analysis.Errors) > 0 {
+		records.SPFAnalysis = analysis
 	}
 
 	// DMARC — TXT record at _dmarc.<domain>

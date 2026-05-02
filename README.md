@@ -50,7 +50,7 @@ go install github.com/retlehs/quien@latest
 - **IP lookups** with reverse DNS, network info, abuse contacts, and ASN discovery via RDAP
   - **BGP fallback** for origin ASN/prefix when RDAP does not include ASN data
   - **PeeringDB enrichment** for ASN context (network/org, peering policy, peering locations, traffic profile, IX/facility counts)
-- **Mail configuration audit** — MX, SPF, DMARC, DKIM, and BIMI with VMC chain validation
+- **Mail configuration audit** — MX, SPF (with lookup-count and include/redirect tree expansion), DMARC, DKIM, and BIMI with VMC chain validation
 - **SEO analysis** — indexability (robots.txt, canonical, sitemap), on-page (title, description, headings, images), structured data (JSON-LD, Open Graph, Twitter Cards), and performance hints (compression, caching, render-blocking resources)
   - **Core Web Vitals** — LCP, INP, CLS, FCP, and TTFB field data with historical trends via the CrUX API (optional)
 - **Tech stack detection** including WordPress plugins, JS/CSS frameworks, and external services parsed from HTML

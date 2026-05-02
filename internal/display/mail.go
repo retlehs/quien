@@ -14,9 +14,14 @@ var (
 	recordStyle   = lipgloss.NewStyle().Foreground(muted)
 )
 
+// SPFExpandAll signals "expand every layer" to RenderMail.
+const SPFExpandAll = -1
+
 // RenderMail returns a lipgloss-styled string for email-related DNS records.
 // mxResolutions (optional) adds expanded IP/rDNS info under each MX host.
-func RenderMail(records *mail.Records, mxResolutions []mail.MXResolution) string {
+// spfDepth controls how many layers of include/redirect to render in the SPF
+// tree: 0 = top-level terms only, N = N nested layers, SPFExpandAll = full.
+func RenderMail(records *mail.Records, mxResolutions []mail.MXResolution, spfDepth int) string {
 	var b strings.Builder
 
 	b.WriteString(domainSectionTitle("Mail Configuration"))
@@ -54,13 +59,7 @@ func RenderMail(records *mail.Records, mxResolutions []mail.MXResolution) string
 	// SPF
 	b.WriteString("\n")
 	b.WriteString(section("SPF"))
-	if records.SPF != "" {
-		b.WriteString(row("Status", foundStyle.Render("found")))
-		// Word-wrap long SPF records
-		b.WriteString(wrapRecord(records.SPF))
-	} else {
-		b.WriteString(row("Status", notFoundStyle.Render("not found")))
-	}
+	renderSPF(&b, records.SPF, records.SPFAnalysis, spfDepth)
 
 	// DMARC
 	b.WriteString("\n")
@@ -133,6 +132,127 @@ func renderVMC(b *strings.Builder, vmc *mail.VMCInfo) {
 	if vmc.Issuer != "" {
 		b.WriteString(row("Issuer", vmc.Issuer))
 	}
+}
+
+var (
+	spfOkStyle    = lipgloss.NewStyle().Foreground(green)
+	spfWarnStyle  = lipgloss.NewStyle().Foreground(yellow)
+	spfErrorStyle = lipgloss.NewStyle().Foreground(red)
+)
+
+func renderSPF(b *strings.Builder, raw string, a *mail.SPFAnalysis, depth int) {
+	if raw == "" && (a == nil || len(a.Records) == 0) {
+		b.WriteString(row("Status", notFoundStyle.Render("not found")))
+		if a != nil {
+			for _, e := range a.Errors {
+				b.WriteString(row("Error", notFoundStyle.Render(e)))
+			}
+		}
+		return
+	}
+
+	b.WriteString(row("Status", foundStyle.Render("found")))
+
+	if a != nil {
+		b.WriteString(row("Lookups", spfLookupBadge(a)))
+		if a.VoidCount > 0 {
+			b.WriteString(row("Inc voids", spfVoidBadge(a)))
+		}
+		if a.Multiple {
+			b.WriteString(row("Warning", notFoundStyle.Render(fmt.Sprintf("multiple SPF records (%d) — PermError", len(a.Records)))))
+		}
+		for _, e := range a.Errors {
+			b.WriteString(row("Error", notFoundStyle.Render(e)))
+		}
+	}
+
+	if raw != "" {
+		b.WriteString(wrapRecord(raw))
+	}
+
+	if a != nil && a.Root != nil {
+		renderSPFTree(b, a.Root, 0, depth)
+	}
+}
+
+func spfLookupBadge(a *mail.SPFAnalysis) string {
+	text := fmt.Sprintf("%d / %d", a.LookupCount, a.LookupLimit)
+	switch {
+	case a.OverLimit:
+		return spfErrorStyle.Render(text + "  PermError")
+	case a.LookupCount >= 8:
+		return spfWarnStyle.Render(text)
+	default:
+		return spfOkStyle.Render(text)
+	}
+}
+
+func spfVoidBadge(a *mail.SPFAnalysis) string {
+	text := fmt.Sprintf("%d / %d", a.VoidCount, a.VoidLimit)
+	if a.OverVoidLimit {
+		return spfErrorStyle.Render(text + "  over limit")
+	}
+	return spfWarnStyle.Render(text)
+}
+
+// renderSPFTree writes the children of node, indented by depth. maxDepth
+// caps how many levels of include/redirect to descend into.
+// SPFExpandAll (-1) means unlimited.
+func renderSPFTree(b *strings.Builder, node *mail.SPFNode, depth int, maxDepth int) {
+	if node == nil {
+		return
+	}
+	for _, child := range node.Children {
+		writeSPFNode(b, child, depth)
+		if (child.Mechanism == "include" || child.Mechanism == "redirect") &&
+			len(child.Children) > 0 &&
+			(maxDepth == SPFExpandAll || depth < maxDepth) {
+			renderSPFTree(b, child, depth+1, maxDepth)
+		}
+	}
+}
+
+func writeSPFNode(b *strings.Builder, n *mail.SPFNode, depth int) {
+	indent := strings.Repeat("  ", depth+1)
+	prefix := indent + dimStyle.Render("→ ")
+
+	term := n.Qualifier + n.Mechanism
+	if n.Target != "" {
+		switch {
+		case strings.HasPrefix(n.Target, "/"):
+			term += n.Target
+		case n.Mechanism == "redirect" || n.Mechanism == "exp":
+			term = n.Mechanism + "=" + n.Target
+		default:
+			term += ":" + n.Target
+		}
+	}
+
+	var styled string
+	switch {
+	case n.CountsLookup:
+		styled = nsStyle.Render(term)
+	default:
+		styled = recordStyle.Render(term)
+	}
+
+	annotations := []string{}
+	switch {
+	case n.Ignored:
+		annotations = append(annotations, dimStyle.Render("ignored — after all"))
+	case n.Error != "":
+		annotations = append(annotations, spfErrorStyle.Render("error: "+n.Error))
+	case n.Void:
+		annotations = append(annotations, spfWarnStyle.Render("void — no SPF record"))
+	case n.Unresolved:
+		annotations = append(annotations, dimStyle.Render("macro — not resolved"))
+	}
+
+	line := prefix + styled
+	if len(annotations) > 0 {
+		line += "  " + dimStyle.Render("(") + strings.Join(annotations, dimStyle.Render(", ")) + dimStyle.Render(")")
+	}
+	b.WriteString(row("", line))
 }
 
 func wrapRecord(s string) string {

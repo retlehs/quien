@@ -83,6 +83,8 @@ type Model struct {
 	mxResolved   []mail.MXResolution
 	mxExpanded   bool
 	mxResolving  bool
+	spfDepth     int  // 0 = top-level only, N = N layers, SPFExpandAll = full
+	spfExpanded  bool // any layer expanded yet
 	tlsData      *tlsinfo.CertInfo
 	httpData     *httpinfo.Result
 	stackData    *stack.Result
@@ -291,6 +293,33 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					return m, resolveMX(hosts)
 				}
+			}
+		case "x":
+			if !m.isIP && m.active == tabMail && m.mailHasSPFTree() {
+				max := spfMaxDepth(m.spfRoot())
+				switch {
+				case m.spfDepth == SPFExpandAll || m.spfDepth >= max:
+					m.spfDepth = 0
+					m.spfExpanded = false
+				default:
+					m.spfDepth++
+					m.spfExpanded = true
+				}
+				m.updateViewport()
+				return m, nil
+			}
+		case "X":
+			if !m.isIP && m.active == tabMail && m.mailHasSPFTree() {
+				max := spfMaxDepth(m.spfRoot())
+				if m.spfDepth == SPFExpandAll || m.spfDepth >= max {
+					m.spfDepth = 0
+					m.spfExpanded = false
+				} else {
+					m.spfDepth = SPFExpandAll
+					m.spfExpanded = true
+				}
+				m.updateViewport()
+				return m, nil
 			}
 		default:
 			key := msg.String()
@@ -535,7 +564,7 @@ func (m Model) contentForTab(t tab) string {
 			if m.mxExpanded {
 				res = m.mxResolved
 			}
-			return RenderMail(m.mailData, res)
+			return RenderMail(m.mailData, res, m.spfDepth)
 		}
 	case tabDNS:
 		if m.loading {
@@ -664,6 +693,17 @@ func (m Model) View() tea.View {
 			footerParts = append(footerParts, "i collapse")
 		default:
 			footerParts = append(footerParts, "i resolve mx")
+		}
+	}
+	if !m.isIP && m.active == tabMail && m.mailHasSPFTree() {
+		max := spfMaxDepth(m.spfRoot())
+		switch {
+		case m.spfDepth == SPFExpandAll || m.spfDepth >= max:
+			footerParts = append(footerParts, "x/X collapse spf")
+		case m.spfExpanded:
+			footerParts = append(footerParts, "x more  X all")
+		default:
+			footerParts = append(footerParts, "x/X expand spf")
 		}
 	}
 	if m.isIP && m.prevDomain != "" {
@@ -818,6 +858,41 @@ func firstIPFromSlices(a []string, aaaa []string) string {
 
 func lookupIPAddrViaConfiguredResolver(ctx context.Context, domain string) ([]net.IPAddr, error) {
 	return dnsutil.GoResolver(5*time.Second).LookupIPAddr(ctx, domain)
+}
+
+// mailHasSPFTree reports whether the SPF analysis has a tree worth expanding —
+// i.e. at least one include or redirect at the root.
+func (m Model) mailHasSPFTree() bool {
+	return spfMaxDepth(m.spfRoot()) > 0
+}
+
+func (m Model) spfRoot() *mail.SPFNode {
+	if m.mailData == nil || m.mailData.SPFAnalysis == nil {
+		return nil
+	}
+	return m.mailData.SPFAnalysis.Root
+}
+
+// spfMaxDepth returns the deepest level of include/redirect nesting that has
+// children worth showing. 0 means no expansion possible.
+func spfMaxDepth(node *mail.SPFNode) int {
+	if node == nil {
+		return 0
+	}
+	max := 0
+	for _, c := range node.Children {
+		if c.Mechanism != "include" && c.Mechanism != "redirect" {
+			continue
+		}
+		if len(c.Children) == 0 {
+			continue
+		}
+		d := 1 + spfMaxDepth(c)
+		if d > max {
+			max = d
+		}
+	}
+	return max
 }
 
 func (m Model) viewportSize() (int, int) {

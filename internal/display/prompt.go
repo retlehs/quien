@@ -52,11 +52,15 @@ func NewPromptModel() PromptModel {
 }
 
 func (m PromptModel) Init() tea.Cmd {
-	return textinput.Blink
+	return tea.Batch(backgroundColorCmd(), textinput.Blink)
 }
 
 func (m PromptModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.BackgroundColorMsg:
+		applyBackgroundColor(msg.IsDark())
+		return m, nil
+
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "ctrl+c", "esc":

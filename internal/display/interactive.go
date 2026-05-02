@@ -185,9 +185,9 @@ func NewIPModel(ip string) Model {
 
 func (m Model) Init() tea.Cmd {
 	if m.isIP {
-		return tea.Batch(m.spinner.Tick, fetchIP(m.domain))
+		return tea.Batch(backgroundColorCmd(), m.spinner.Tick, fetchIP(m.domain))
 	}
-	return tea.Batch(m.spinner.Tick, fetchWhois(m.domain))
+	return tea.Batch(backgroundColorCmd(), m.spinner.Tick, fetchWhois(m.domain))
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -208,6 +208,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport.SetWidth(vpWidth)
 			m.viewport.SetHeight(vpHeight)
 		}
+		return m, nil
+
+	case tea.BackgroundColorMsg:
+		applyBackgroundColor(msg.IsDark())
+		m.updateViewport()
 		return m, nil
 
 	case tea.KeyPressMsg:

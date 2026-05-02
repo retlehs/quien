@@ -3,12 +3,10 @@ package display
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
 	"charm.land/lipgloss/v2"
-	"charm.land/lipgloss/v2/compat"
 	"github.com/retlehs/quien/internal/model"
 )
 
@@ -38,22 +36,6 @@ func SetWidth(w int) {
 		w = 40
 	}
 	displayWidth = w
-}
-
-func init() {
-	switch strings.ToLower(os.Getenv("QUIEN_THEME")) {
-	case "light":
-		compat.HasDarkBackground = false
-	case "dark":
-		compat.HasDarkBackground = true
-	}
-	// "auto" or unset: compat detects automatically.
-}
-
-// ac returns an AdaptiveColor that picks light on light backgrounds and dark
-// on dark backgrounds. compat detects the terminal background automatically.
-func ac(light, dark string) compat.AdaptiveColor {
-	return compat.AdaptiveColor{Light: lipgloss.Color(light), Dark: lipgloss.Color(dark)}
 }
 
 var (

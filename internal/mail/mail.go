@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -12,6 +13,10 @@ import (
 	mdns "github.com/miekg/dns"
 	"github.com/retlehs/quien/internal/dnsutil"
 )
+
+// DKIMSelectorsEnvVar holds a comma-separated list of DKIM selectors that are
+// probed in addition to the built-in common-selector list.
+const DKIMSelectorsEnvVar = "QUIEN_DKIM_SELECTORS"
 
 type Records struct {
 	MX          []MXRecord
@@ -70,10 +75,32 @@ var dkimSelectors = []string{
 	"sig1", // Hubspot
 }
 
+// LookupOptions tunes Lookup behavior.
+type LookupOptions struct {
+	// DKIMSelectors are user-supplied selectors probed in addition to the
+	// built-in common-selector list. User selectors are probed first; the
+	// merged list is deduped (case-insensitive, whitespace-trimmed).
+	// When empty, QUIEN_DKIM_SELECTORS is consulted as a fallback.
+	DKIMSelectors []string
+}
+
 // Lookup queries MX, SPF, DKIM, and DMARC records for the given domain.
+// User selectors from QUIEN_DKIM_SELECTORS, if set, are probed alongside the
+// built-in common-selector list.
 func Lookup(domain string) (*Records, error) {
+	return LookupWithOptions(domain, LookupOptions{})
+}
+
+// LookupWithOptions is Lookup with caller-controlled options. When
+// opts.DKIMSelectors is empty, QUIEN_DKIM_SELECTORS is used as a fallback.
+func LookupWithOptions(domain string, opts LookupOptions) (*Records, error) {
 	resolver := findResolver()
 	records := &Records{}
+
+	userSelectors := opts.DKIMSelectors
+	if len(userSelectors) == 0 {
+		userSelectors = selectorsFromEnv()
+	}
 
 	// MX
 	if rr, err := query(domain+".", mdns.TypeMX, resolver); err == nil {
@@ -129,25 +156,87 @@ func Lookup(domain string) (*Records, error) {
 		records.BIMI.VMC = fetchVMC(records.BIMI.VMCURL)
 	}
 
-	// DKIM — probe common selectors
-	for _, sel := range dkimSelectors {
-		qname := sel + "._domainkey." + domain + "."
-		if rr, err := query(qname, mdns.TypeTXT, resolver); err == nil {
-			for _, r := range rr {
-				if txt, ok := r.(*mdns.TXT); ok {
-					val := strings.Join(txt.Txt, "")
-					if strings.Contains(strings.ToLower(val), "v=dkim1") {
-						records.DKIM = append(records.DKIM, DKIMRecord{
-							Selector: sel,
-							Value:    val,
-						})
-					}
-				}
-			}
-		}
-	}
+	// DKIM — probe merged selector list in parallel
+	records.DKIM = lookupDKIM(domain, mergeDKIMSelectors(userSelectors, dkimSelectors), resolver)
 
 	return records, nil
+}
+
+// selectorsFromEnv parses QUIEN_DKIM_SELECTORS into a slice. The env var is a
+// comma-separated list; whitespace is trimmed and empty entries are dropped.
+func selectorsFromEnv() []string {
+	raw := strings.TrimSpace(os.Getenv(DKIMSelectorsEnvVar))
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if s := strings.TrimSpace(p); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// mergeDKIMSelectors returns user selectors first, then defaults, deduped
+// (case-insensitive after trimming) and dropping any empty entries.
+func mergeDKIMSelectors(user, defaults []string) []string {
+	merged := make([]string, 0, len(user)+len(defaults))
+	seen := map[string]struct{}{}
+	for _, src := range [][]string{user, defaults} {
+		for _, s := range src {
+			s = strings.TrimSpace(s)
+			if s == "" {
+				continue
+			}
+			key := strings.ToLower(s)
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			merged = append(merged, s)
+		}
+	}
+	return merged
+}
+
+// lookupDKIM probes each selector concurrently and returns matching v=DKIM1
+// TXT records in selector-order.
+func lookupDKIM(domain string, selectors []string, resolver string) []DKIMRecord {
+	if len(selectors) == 0 {
+		return nil
+	}
+	results := make([][]DKIMRecord, len(selectors))
+	var wg sync.WaitGroup
+	for i, sel := range selectors {
+		wg.Add(1)
+		go func(i int, sel string) {
+			defer wg.Done()
+			qname := sel + "._domainkey." + domain + "."
+			rr, err := query(qname, mdns.TypeTXT, resolver)
+			if err != nil {
+				return
+			}
+			for _, r := range rr {
+				txt, ok := r.(*mdns.TXT)
+				if !ok {
+					continue
+				}
+				val := strings.Join(txt.Txt, "")
+				if strings.Contains(strings.ToLower(val), "v=dkim1") {
+					results[i] = append(results[i], DKIMRecord{Selector: sel, Value: val})
+				}
+			}
+		}(i, sel)
+	}
+	wg.Wait()
+
+	var out []DKIMRecord
+	for _, r := range results {
+		out = append(out, r...)
+	}
+	return out
 }
 
 // MXResolution pairs an MX host with its resolved IP addresses (and reverse DNS).

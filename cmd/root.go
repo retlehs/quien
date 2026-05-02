@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/retlehs/quien/internal/display"
 	"github.com/retlehs/quien/internal/dnsutil"
+	"github.com/retlehs/quien/internal/mail"
 	"github.com/retlehs/quien/internal/resolver"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -16,6 +17,7 @@ import (
 
 var jsonFlag bool
 var resolverFlag string
+var dkimSelectorFlag []string
 
 var rootCmd = &cobra.Command{
 	Use:          "quien [domain or IP]",
@@ -24,6 +26,12 @@ var rootCmd = &cobra.Command{
 	Args:         cobra.MaximumNArgs(1),
 	SilenceUsage: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		if len(dkimSelectorFlag) > 0 {
+			if err := os.Setenv(mail.DKIMSelectorsEnvVar, strings.Join(dkimSelectorFlag, ",")); err != nil {
+				return err
+			}
+		}
+
 		if resolverFlag != "" {
 			normalized, err := dnsutil.NormalizeResolver(resolverFlag)
 			if err != nil {
@@ -127,6 +135,7 @@ func runLookup(input string, isIP bool) error {
 func init() {
 	rootCmd.Flags().BoolVar(&jsonFlag, "json", false, "output as JSON")
 	rootCmd.PersistentFlags().StringVar(&resolverFlag, "resolver", "", "DNS resolver to use for DNS/mail lookups (host or host:port). Overrides "+dnsutil.ResolverEnvVar)
+	rootCmd.PersistentFlags().StringSliceVar(&dkimSelectorFlag, "dkim-selector", nil, "DKIM selector(s) to probe in addition to the built-in common list (repeatable, comma-separated). Overrides "+mail.DKIMSelectorsEnvVar)
 }
 
 func Execute(version, commit, date string) {

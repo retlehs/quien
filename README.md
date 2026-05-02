@@ -82,6 +82,12 @@ quien seo example.com
 quien stack example.com
 quien all example.com
 
+# Probe additional DKIM selectors beyond the built-in common list
+quien mail example.com --dkim-selector mySelector --dkim-selector other
+
+# Set default DKIM selectors via environment variable
+QUIEN_DKIM_SELECTORS=mySelector,other quien example.com
+
 # Use a specific DNS resolver for this run
 quien mail example.com --resolver 9.9.9.9
 
@@ -90,6 +96,8 @@ QUIEN_RESOLVER=1.1.1.1 quien dns example.com
 ```
 
 Resolver precedence: `--resolver` > `QUIEN_RESOLVER` > system resolver.
+
+DKIM selector precedence: `--dkim-selector` > `QUIEN_DKIM_SELECTORS`. User selectors are probed in addition to the built-in common-selector list.
 
 ## Core Web Vitals
 

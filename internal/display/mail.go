@@ -81,7 +81,7 @@ func RenderMail(records *mail.Records, mxResolutions []mail.MXResolution, spfDep
 			b.WriteString(wrapRecord(dk.Value))
 		}
 	} else {
-		b.WriteString(row("Status", dimStyle.Render("no records found (checked common selectors)")))
+		b.WriteString(row("Status", dimStyle.Render("no records found for checked selectors")))
 	}
 
 	// BIMI

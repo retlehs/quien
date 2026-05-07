@@ -101,12 +101,29 @@ type Model struct {
 	prevWhoisErr error
 	resolvingIP  bool
 	loading      bool
+	fetching     uint32
 	quitting     bool
 	viewport     viewport.Model
 	spinner      spinner.Model
 	ready        bool
 	width        int
 	height       int
+}
+
+func (m *Model) setFetching(t tab, b bool) {
+	if b {
+		m.fetching |= (1 << uint(t))
+	} else {
+		m.fetching &= ^(1 << uint(t))
+	}
+}
+
+func (m Model) isFetching(t tab) bool {
+	return (m.fetching & (1 << uint(t))) != 0
+}
+
+func (m *Model) updateLoading() {
+	m.loading = m.isFetching(m.active) || (m.active == tabWhois && m.resolvingIP)
 }
 
 type whoisResultMsg struct {
@@ -164,10 +181,11 @@ func NewModel(domain string) Model {
 	s.Style = lipgloss.NewStyle().Foreground(cyan)
 
 	return Model{
-		domain:  domain,
-		active:  tabWhois,
-		loading: true,
-		spinner: s,
+		domain:   domain,
+		active:   tabWhois,
+		loading:  true,
+		fetching: 1 << uint(tabWhois),
+		spinner:  s,
 	}
 }
 
@@ -177,11 +195,12 @@ func NewIPModel(ip string) Model {
 	s.Style = lipgloss.NewStyle().Foreground(cyan)
 
 	return Model{
-		domain:  ip,
-		isIP:    true,
-		active:  tabWhois,
-		loading: true,
-		spinner: s,
+		domain:   ip,
+		isIP:     true,
+		active:   tabWhois,
+		loading:  true,
+		fetching: 1 << uint(tabWhois),
+		spinner:  s,
 	}
 }
 
@@ -218,14 +237,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
-		if m.loading {
-			if msg.String() == "q" || msg.String() == "esc" || msg.String() == "ctrl+c" {
-				m.quitting = true
-				return m, tea.Quit
-			}
-			return m, nil
-		}
-
 		switch msg.String() {
 		case "q", "ctrl+c":
 			m.quitting = true
@@ -236,8 +247,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.domain = m.prevDomain
 				m.active = tabWhois
 				m.showRaw = false
-				m.loading = false
 				m.resolvingIP = false
+				m.setFetching(tabWhois, false) // WHOIS was already loaded before jump
+				m.updateLoading()
 				m.info = m.prevInfo
 				m.whoisErr = m.prevWhoisErr
 				m.ipInfo = nil
@@ -273,7 +285,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !m.isIP && m.active == tabWhois {
 				m.ipJumpErr = nil
 				m.resolvingIP = true
-				m.loading = true
+				m.updateLoading()
 				m.updateViewport()
 				return m, resolveFirstIP(m.domain, m.dnsData)
 			}
@@ -340,8 +352,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 
 	case whoisResultMsg:
-		m.loading = false
+		m.setFetching(tabWhois, false)
 		m.resolvingIP = false
+		m.updateLoading()
 		if msg.err != nil {
 			m.whoisErr = msg.err
 		} else {
@@ -354,8 +367,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.isIP {
 			return m, nil
 		}
-		m.loading = false
+		m.setFetching(tabWhois, false)
 		m.resolvingIP = false
+		m.updateLoading()
 		if msg.err != nil {
 			m.whoisErr = msg.err
 		} else {
@@ -371,56 +385,56 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case mailResultMsg:
-		m.loading = false
-		m.resolvingIP = false
+		m.setFetching(tabMail, false)
+		m.updateLoading()
 		m.mailData = msg.records
 		m.mailErr = msg.err
 		m.updateViewport()
 		return m, nil
 
 	case dnsResultMsg:
-		m.loading = false
-		m.resolvingIP = false
+		m.setFetching(tabDNS, false)
+		m.updateLoading()
 		m.dnsData = msg.records
 		m.dnsErr = msg.err
 		m.updateViewport()
 		return m, nil
 
 	case tlsResultMsg:
-		m.loading = false
-		m.resolvingIP = false
+		m.setFetching(tabTLS, false)
+		m.updateLoading()
 		m.tlsData = msg.cert
 		m.tlsErr = msg.err
 		m.updateViewport()
 		return m, nil
 
 	case httpResultMsg:
-		m.loading = false
-		m.resolvingIP = false
+		m.setFetching(tabHTTP, false)
+		m.updateLoading()
 		m.httpData = msg.result
 		m.httpErr = msg.err
 		m.updateViewport()
 		return m, nil
 
 	case stackResultMsg:
-		m.loading = false
-		m.resolvingIP = false
+		m.setFetching(tabStack, false)
+		m.updateLoading()
 		m.stackData = msg.result
 		m.stackErr = msg.err
 		m.updateViewport()
 		return m, nil
 
 	case seoResultMsg:
-		m.loading = false
-		m.resolvingIP = false
+		m.setFetching(tabSEO, false)
+		m.updateLoading()
 		m.seoData = msg.result
 		m.seoErr = msg.err
 		m.updateViewport()
 		return m, nil
 
 	case resolveIPResultMsg:
-		m.loading = false
 		m.resolvingIP = false
+		m.updateLoading()
 		if msg.err != nil {
 			m.ipJumpErr = msg.err
 			m.updateViewport()
@@ -434,7 +448,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.domain = msg.ip
 		m.active = tabWhois
 		m.showRaw = false
-		m.loading = true
+		m.setFetching(tabWhois, true)
+		m.updateLoading()
 		m.info = nil
 		m.ipInfo = nil
 		m.whoisErr = nil
@@ -459,6 +474,7 @@ func (m *Model) switchTab(t tab) {
 	m.active = t
 	m.showRaw = false
 	m.ipJumpErr = nil
+	m.updateLoading()
 	m.updateViewport()
 	m.viewport.GotoTop()
 }
@@ -471,34 +487,35 @@ func (m *Model) activateTab(t tab) tea.Cmd {
 	var cmd tea.Cmd
 	switch t {
 	case tabDNS:
-		if m.dnsData == nil && m.dnsErr == nil {
+		if m.dnsData == nil && m.dnsErr == nil && !m.isFetching(tabDNS) {
 			cmd = fetchDNS(m.domain)
 		}
 	case tabMail:
-		if m.mailData == nil && m.mailErr == nil {
+		if m.mailData == nil && m.mailErr == nil && !m.isFetching(tabMail) {
 			cmd = fetchMail(m.domain)
 		}
 	case tabTLS:
-		if m.tlsData == nil && m.tlsErr == nil {
+		if m.tlsData == nil && m.tlsErr == nil && !m.isFetching(tabTLS) {
 			cmd = fetchTLS(m.domain)
 		}
 	case tabHTTP:
-		if m.httpData == nil && m.httpErr == nil {
+		if m.httpData == nil && m.httpErr == nil && !m.isFetching(tabHTTP) {
 			cmd = fetchHTTP(m.domain)
 		}
 	case tabStack:
-		if m.stackData == nil && m.stackErr == nil {
+		if m.stackData == nil && m.stackErr == nil && !m.isFetching(tabStack) {
 			cmd = fetchStack(m.domain)
 		}
 	case tabSEO:
-		if m.seoData == nil && m.seoErr == nil {
+		if m.seoData == nil && m.seoErr == nil && !m.isFetching(tabSEO) {
 			cmd = fetchSEO(m.domain)
 		}
 	}
 	if cmd != nil {
-		m.loading = true
-		m.updateViewport()
+		m.setFetching(t, true)
 	}
+	m.updateLoading()
+	m.updateViewport()
 	return cmd
 }
 

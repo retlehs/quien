@@ -282,7 +282,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		case "i":
-			if !m.isIP && m.active == tabWhois {
+			if !m.isIP && m.active == tabWhois && !m.isFetching(tabWhois) && !m.resolvingIP {
 				m.ipJumpErr = nil
 				m.resolvingIP = true
 				m.updateLoading()
@@ -352,6 +352,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 
 	case whoisResultMsg:
+		if m.isIP {
+			// Stale result for the previous domain — user pressed `i` and we
+			// switched to IP mode before this fetch returned. Drop it.
+			return m, nil
+		}
 		m.setFetching(tabWhois, false)
 		m.resolvingIP = false
 		m.updateLoading()
@@ -435,6 +440,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case resolveIPResultMsg:
 		m.resolvingIP = false
 		m.updateLoading()
+		if m.active != tabWhois {
+			// User navigated to another tab while resolveFirstIP was in
+			// flight — drop the result rather than yanking them into IP mode.
+			return m, nil
+		}
 		if msg.err != nil {
 			m.ipJumpErr = msg.err
 			m.updateViewport()

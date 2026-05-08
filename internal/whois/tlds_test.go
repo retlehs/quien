@@ -106,6 +106,70 @@ s. [Signing Key]
 	}
 }
 
+func TestAUExtensions(t *testing.T) {
+	raw := `Domain Name: auda.org.au
+Last Modified: 2023-07-05T00:23:15Z
+Registrar Name: auDA
+Status: serverDeleteProhibited https://identitydigital.au/whois-status-codes#serverDeleteProhibited
+Registrant Contact ID: 5b8528848e1b48ddbf62fa592f627c57-AU
+Registrant Contact Name: CEO
+Tech Contact ID: 5b8528848e1b48ddbf62fa592f627c57-AU
+Tech Contact Name: CEO
+Name Server: ingrid.ns.cloudflare.com
+Name Server: karl.ns.cloudflare.com
+DNSSEC: signedDelegation
+Registrant: .au Domain Administration Ltd
+Registrant ID: ACN 079 009 340
+Eligibility Type: Company`
+
+	info := Parse(raw)
+
+	// Standard fields must still work.
+	if info.Registrar != "auDA" {
+		t.Errorf("Registrar = %q, want auDA", info.Registrar)
+	}
+	if info.UpdatedDate.Year() != 2023 {
+		t.Errorf("UpdatedDate year = %d, want 2023", info.UpdatedDate.Year())
+	}
+	if len(info.Status) != 1 || info.Status[0] != "serverDeleteProhibited" {
+		t.Errorf("Status = %v, want [serverDeleteProhibited]", info.Status)
+	}
+	if len(info.Nameservers) != 2 {
+		t.Errorf("Nameservers count = %d, want 2", len(info.Nameservers))
+	}
+	if !info.DNSSEC {
+		t.Error("DNSSEC should be true for signedDelegation")
+	}
+
+	// Contact person fields must not be overwritten by the entity fields.
+	var regName, techName string
+	for _, c := range info.Contacts {
+		switch c.Role {
+		case "registrant":
+			regName = c.Name
+		case "tech":
+			techName = c.Name
+		}
+	}
+	if regName != "CEO" {
+		t.Errorf("registrant contact name = %q, want CEO", regName)
+	}
+	if techName != "CEO" {
+		t.Errorf("tech contact name = %q, want CEO", techName)
+	}
+
+	// Entity extensions must be captured.
+	if got := info.Extensions["Registrant"]; got != ".au Domain Administration Ltd" {
+		t.Errorf("Extensions[Registrant] = %q, want .au Domain Administration Ltd", got)
+	}
+	if got := info.Extensions["Registrant ID"]; got != "ACN 079 009 340" {
+		t.Errorf("Extensions[Registrant ID] = %q, want ACN 079 009 340", got)
+	}
+	if got := info.Extensions["Type"]; got != "Company" {
+		t.Errorf("Extensions[Type] = %q, want Company", got)
+	}
+}
+
 func TestCleanReferralHost(t *testing.T) {
 	tests := map[string]string{
 		// Bare hostname — unchanged.

@@ -3,6 +3,7 @@ package display
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -148,6 +149,11 @@ func RenderWhois(info model.DomainInfo) string {
 		b.WriteString(renderContact(contact))
 	}
 
+	if len(info.Extensions) > 0 {
+		b.WriteString("\n")
+		b.WriteString(renderExtensions(info.ExtensionSection, info.Extensions))
+	}
+
 	return b.String()
 }
 
@@ -254,6 +260,23 @@ func section(title string) string {
 	}
 	line := dividerStyle.Render(strings.Repeat("─", lineWidth))
 	return label + " " + line + "\n"
+}
+
+func renderExtensions(title string, ext map[string]string) string {
+	if title == "" {
+		title = "Extensions"
+	}
+	var b strings.Builder
+	b.WriteString(section(title))
+	keys := make([]string, 0, len(ext))
+	for k := range ext {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		b.WriteString(row(k, ext[k]))
+	}
+	return b.String()
 }
 
 func renderContact(c model.Contact) string {

@@ -105,4 +105,8 @@ func mergeFromWhois(info *model.DomainInfo, w *model.DomainInfo) {
 	if len(info.Contacts) == 0 {
 		info.Contacts = w.Contacts
 	}
+	if len(info.Extensions) == 0 && len(w.Extensions) > 0 {
+		info.Extensions = w.Extensions
+		info.ExtensionSection = w.ExtensionSection
+	}
 }

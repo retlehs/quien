@@ -91,6 +91,26 @@ func TestMergeFromWhois_RDAPWinsWhereBothHaveData(t *testing.T) {
 	}
 }
 
+func TestMergeFromWhois_PropagatesExtensions(t *testing.T) {
+	info := &model.DomainInfo{DomainName: "auda.org.au"}
+	w := &model.DomainInfo{
+		Extensions:       map[string]string{"Registrant": "Example Pty Ltd", "Type": "Company"},
+		ExtensionSection: "Eligibility",
+	}
+
+	mergeFromWhois(info, w)
+
+	if len(info.Extensions) != 2 {
+		t.Errorf("Extensions len = %d, want 2", len(info.Extensions))
+	}
+	if info.Extensions["Registrant"] != "Example Pty Ltd" {
+		t.Errorf("Extensions[Registrant] = %q, want Example Pty Ltd", info.Extensions["Registrant"])
+	}
+	if info.ExtensionSection != "Eligibility" {
+		t.Errorf("ExtensionSection = %q, want Eligibility", info.ExtensionSection)
+	}
+}
+
 func TestMergeFromWhois_EmptyWhoisIsNoOp(t *testing.T) {
 	info := &model.DomainInfo{
 		DomainName: "example.com",

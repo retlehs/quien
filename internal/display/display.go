@@ -263,9 +263,6 @@ func section(title string) string {
 }
 
 func renderExtensions(title string, ext map[string]string) string {
-	if title == "" {
-		title = "Extensions"
-	}
 	var b strings.Builder
 	b.WriteString(section(title))
 	keys := make([]string, 0, len(ext))

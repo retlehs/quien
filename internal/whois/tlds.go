@@ -89,10 +89,10 @@ var jprsLabelRenames = map[string]string{
 	"state": "Status", // JPRS uses "State" for domain lifecycle (Connected/...)
 }
 
-// ExtractExtensions returns TLD-specific key-value pairs from the parsed WHOIS
+// extractExtensions returns TLD-specific key-value pairs from the parsed WHOIS
 // key-value map. Returns nil if the TLD has no extension keys configured or
 // none of the keys appear in the response.
-func ExtractExtensions(domain string, kv map[string][]string) map[string]string {
+func extractExtensions(domain string, kv map[string][]string) map[string]string {
 	cfg, ok := tlds[tldOf(domain)]
 	if !ok || len(cfg.extensionKeys) == 0 {
 		return nil
@@ -109,9 +109,9 @@ func ExtractExtensions(domain string, kv map[string][]string) map[string]string 
 	return result
 }
 
-// ExtensionSection returns the display heading for the extensions block.
+// extensionSection returns the display heading for the extensions block.
 // Falls back to "Extensions" when the TLD has no custom section name.
-func ExtensionSection(domain string) string {
+func extensionSection(domain string) string {
 	if cfg, ok := tlds[tldOf(domain)]; ok && cfg.extensionSection != "" {
 		return cfg.extensionSection
 	}

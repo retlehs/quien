@@ -2,6 +2,7 @@ package dns
 
 import (
 	"net"
+	"slices"
 	"testing"
 
 	mdns "github.com/miekg/dns"
@@ -111,6 +112,77 @@ func TestQueryUDPSuccessSkipsTCPFallback(t *testing.T) {
 	}
 	if len(rr) != 1 {
 		t.Fatalf("expected 1 answer, got %d", len(rr))
+	}
+}
+
+func TestParseHTTPS(t *testing.T) {
+	hdr := mdns.RR_Header{Name: "example.com.", Rrtype: mdns.TypeHTTPS, Class: mdns.ClassINET, Ttl: 300}
+
+	service := &mdns.HTTPS{SVCB: mdns.SVCB{
+		Hdr:      hdr,
+		Priority: 2,
+		Target:   ".",
+		Value: []mdns.SVCBKeyValue{
+			&mdns.SVCBAlpn{Alpn: []string{"h3", "h2"}},
+			&mdns.SVCBPort{Port: 8443},
+			&mdns.SVCBIPv4Hint{Hint: []net.IP{net.ParseIP("192.0.2.1")}},
+			&mdns.SVCBIPv6Hint{Hint: []net.IP{net.ParseIP("2001:db8::1")}},
+			&mdns.SVCBECHConfig{ECH: []byte{0x00, 0x01}},
+			&mdns.SVCBMandatory{Code: []mdns.SVCBKey{mdns.SVCB_ALPN}},
+		},
+	}}
+	alias := &mdns.HTTPS{SVCB: mdns.SVCB{
+		Hdr:      hdr,
+		Priority: 0,
+		Target:   "svc.example.net.",
+	}}
+
+	// Pass the higher-priority record first to confirm sorting by priority.
+	got := parseHTTPS([]mdns.RR{service, alias})
+
+	if len(got) != 2 {
+		t.Fatalf("expected 2 records, got %d", len(got))
+	}
+
+	// Alias (priority 0) should sort ahead of the service record.
+	if got[0].Priority != 0 || got[0].Target != "svc.example.net" {
+		t.Errorf("record[0] = %+v, want alias mode targeting svc.example.net", got[0])
+	}
+
+	svc := got[1]
+	if svc.Priority != 2 {
+		t.Errorf("priority = %d, want 2", svc.Priority)
+	}
+	if svc.Target != "." {
+		t.Errorf("target = %q, want \".\" (self)", svc.Target)
+	}
+	if want := []string{"h3", "h2"}; !slices.Equal(svc.ALPN, want) {
+		t.Errorf("alpn = %v, want %v", svc.ALPN, want)
+	}
+	if svc.Port != 8443 {
+		t.Errorf("port = %d, want 8443", svc.Port)
+	}
+	if want := []string{"192.0.2.1"}; !slices.Equal(svc.IPv4Hint, want) {
+		t.Errorf("ipv4hint = %v, want %v", svc.IPv4Hint, want)
+	}
+	if want := []string{"2001:db8::1"}; !slices.Equal(svc.IPv6Hint, want) {
+		t.Errorf("ipv6hint = %v, want %v", svc.IPv6Hint, want)
+	}
+	if svc.ECHConfig != "AAE=" {
+		t.Errorf("ech config = %q, want base64 of {0x00,0x01}", svc.ECHConfig)
+	}
+	if want := []string{"mandatory=alpn"}; !slices.Equal(svc.Params, want) {
+		t.Errorf("params = %v, want %v", svc.Params, want)
+	}
+}
+
+func TestParseHTTPSIgnoresNonHTTPS(t *testing.T) {
+	a := &mdns.A{
+		Hdr: mdns.RR_Header{Name: "example.com.", Rrtype: mdns.TypeA, Class: mdns.ClassINET, Ttl: 60},
+		A:   net.ParseIP("192.0.2.1"),
+	}
+	if got := parseHTTPS([]mdns.RR{a}); got != nil {
+		t.Errorf("expected nil for non-HTTPS records, got %v", got)
 	}
 }
 

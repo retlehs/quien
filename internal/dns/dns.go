@@ -14,12 +14,27 @@ type Records struct {
 	A      []string
 	AAAA   []string
 	CNAME  []string
+	HTTPS  []HTTPSRecord
 	MX     []MXRecord
 	NS     []string
 	TXT    []string
 	PTR    []PTRRecord
 	SOA    *SOARecord
 	DNSSEC bool
+}
+
+// HTTPSRecord is an HTTPS (SVCB-family) resource record (RFC 9460).
+// Priority 0 is alias mode; a non-zero priority is service mode and
+// carries the SvcParams below. A Target of "." means the owner name.
+type HTTPSRecord struct {
+	Priority  uint16
+	Target    string
+	ALPN      []string
+	Port      uint16
+	IPv4Hint  []string
+	IPv6Hint  []string
+	ECHConfig string   // base64 ECHConfigList, empty when absent
+	Params    []string // other/unknown SvcParams as "key=value"
 }
 
 type PTRRecord struct {
@@ -111,6 +126,10 @@ func Lookup(domain string) (*Records, error) {
 		}
 	}
 
+	if rr, err := query(domain, mdns.TypeHTTPS, resolver); err == nil {
+		records.HTTPS = parseHTTPS(rr)
+	}
+
 	if rr, err := query(domain, mdns.TypeMX, resolver); err == nil {
 		for _, r := range rr {
 			if mx, ok := r.(*mdns.MX); ok {
@@ -180,6 +199,48 @@ func Lookup(domain string) (*Records, error) {
 	}
 
 	return records, nil
+}
+
+// parseHTTPS extracts the SvcParams from HTTPS (SVCB) resource records into a
+// display-friendly form. Well-known keys (ALPN, port, IP hints, ECH) get their
+// own fields; anything else is preserved verbatim in Params.
+func parseHTTPS(rr []mdns.RR) []HTTPSRecord {
+	var out []HTTPSRecord
+	for _, r := range rr {
+		h, ok := r.(*mdns.HTTPS)
+		if !ok {
+			continue
+		}
+		rec := HTTPSRecord{Priority: h.Priority, Target: h.Target}
+		if rec.Target != "." {
+			rec.Target = strings.TrimSuffix(rec.Target, ".")
+		}
+		for _, kv := range h.Value {
+			switch v := kv.(type) {
+			case *mdns.SVCBAlpn:
+				rec.ALPN = v.Alpn
+			case *mdns.SVCBPort:
+				rec.Port = v.Port
+			case *mdns.SVCBIPv4Hint:
+				for _, ip := range v.Hint {
+					rec.IPv4Hint = append(rec.IPv4Hint, ip.String())
+				}
+			case *mdns.SVCBIPv6Hint:
+				for _, ip := range v.Hint {
+					rec.IPv6Hint = append(rec.IPv6Hint, ip.String())
+				}
+			case *mdns.SVCBECHConfig:
+				rec.ECHConfig = v.String()
+			default:
+				rec.Params = append(rec.Params, kv.Key().String()+"="+kv.String())
+			}
+		}
+		out = append(out, rec)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Priority < out[j].Priority
+	})
+	return out
 }
 
 func query(domain string, qtype uint16, resolver string) ([]mdns.RR, error) {

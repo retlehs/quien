@@ -45,6 +45,15 @@ func RenderDNS(records *dns.Records) string {
 		}
 	}
 
+	if len(records.HTTPS) > 0 {
+		hasRecords = true
+		b.WriteString("\n")
+		b.WriteString(section("HTTPS"))
+		for _, h := range records.HTTPS {
+			b.WriteString(renderHTTPSRecord(h))
+		}
+	}
+
 	if len(records.MX) > 0 {
 		hasRecords = true
 		b.WriteString("\n")
@@ -109,6 +118,56 @@ func RenderDNS(records *dns.Records) string {
 	if !hasRecords {
 		b.WriteString(dimStyle.Render("  No records found"))
 		b.WriteString("\n")
+	}
+
+	return b.String()
+}
+
+// renderHTTPSRecord renders a single HTTPS (SVCB) record. Priority 0 is alias
+// mode and only carries a target; otherwise the SvcParams are listed. A target
+// of "." (the owner name itself) is the common case and shown without a header.
+func renderHTTPSRecord(h dns.HTTPSRecord) string {
+	var b strings.Builder
+
+	target := h.Target
+	if target == "." {
+		target = ""
+	}
+
+	if h.Priority == 0 {
+		alias := dimStyle.Render("alias → ")
+		if target == "" {
+			return row("", alias+dimStyle.Render("(self)"))
+		}
+		return row("", alias+nsStyle.Render(target))
+	}
+
+	// Service mode: always emit an identity row so priority is visible and
+	// multiple records stay visually separated, even for the common "." target.
+	pri := dimStyle.Render(fmt.Sprintf("(%d)", h.Priority))
+	if target == "" {
+		b.WriteString(row("", dimStyle.Render("(self)")+" "+pri))
+	} else {
+		b.WriteString(row("", nsStyle.Render(target)+" "+pri))
+	}
+
+	if len(h.ALPN) > 0 {
+		b.WriteString(row("alpn", strings.Join(h.ALPN, ", ")))
+	}
+	if h.Port != 0 {
+		b.WriteString(row("port", fmt.Sprintf("%d", h.Port)))
+	}
+	for _, ip := range h.IPv4Hint {
+		b.WriteString(row("ipv4hint", nsStyle.Render(ip)))
+	}
+	for _, ip := range h.IPv6Hint {
+		b.WriteString(row("ipv6hint", nsStyle.Render(ip)))
+	}
+	if h.ECHConfig != "" {
+		b.WriteString(row("ech", lipgloss.NewStyle().Foreground(green).Render("present")))
+	}
+	for _, p := range h.Params {
+		b.WriteString(row("", dimStyle.Render(p)))
 	}
 
 	return b.String()

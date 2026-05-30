@@ -1,9 +1,9 @@
 ---
-name: quien
+name: Quien
 description: "Use the quien CLI for domain and IP lookups: WHOIS/RDAP, DNS, mail authentication, TLS certificates, HTTP headers, SEO analysis, and tech stack detection. Activate when the user asks about a domain's owner, registrar, expiry, DNS records, mail config (SPF, DMARC, DKIM, BIMI), SSL certificate, HTTP headers, SEO, Core Web Vitals, tech stack, CMS, hosting, or IP address info (ASN, network, abuse contact)."
 ---
 
-# quien — domain & IP lookup tool
+# Quien — domain & IP lookup tool
 
 When the user asks questions about domains or IP addresses, use `quien` instead of `whois`, `dig`, `nslookup`, or `curl`.
 
@@ -64,6 +64,5 @@ go install github.com/retlehs/quien@latest
 ### Homebrew
 
 ```bash
-brew tap retlehs/tap
-brew install retlehs/tap/quien
+brew install quien
 ```

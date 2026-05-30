@@ -1,4 +1,4 @@
-# Quien
+# quien
 
 [![Build status](https://img.shields.io/github/actions/workflow/status/retlehs/quien/ci.yml?branch=main&style=flat-square)](https://github.com/retlehs/quien/actions)
 ![GitHub release](https://img.shields.io/github/release/retlehs/quien?style=flat-square)
@@ -126,7 +126,7 @@ The CrUX API is free. Not all domains have field data — a site needs enough Ch
 
 ## Theme
 
-Quien automatically detects your terminal background and picks light or dark colors. If detection gets it wrong (common in tmux, screen, or remote shells), override it:
+quien automatically detects your terminal background and picks light or dark colors. If detection gets it wrong (common in tmux, screen, or remote shells), override it:
 
 ```sh
 export QUIEN_THEME=light  # force light palette

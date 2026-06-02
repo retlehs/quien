@@ -9,6 +9,12 @@ on:
 permissions:
   contents: read
 
+env:
+  # Those values will quiet git hints about changing default branch name
+  GIT_CONFIG_COUNT: "1"
+  GIT_CONFIG_KEY_0: init.defaultBranch
+  GIT_CONFIG_VALUE_0: main
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true

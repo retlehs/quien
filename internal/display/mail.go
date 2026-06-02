@@ -256,10 +256,7 @@ func writeSPFNode(b *strings.Builder, n *mail.SPFNode, depth int) {
 }
 
 func wrapRecord(s string) string {
-	maxWidth := valueWidth()
-	if maxWidth < 10 {
-		maxWidth = 10
-	}
+	maxWidth := max(valueWidth(), 10)
 	indent := strings.Repeat(" ", labelWidth+gutter)
 	lines := wrapText(s, maxWidth)
 	var b strings.Builder

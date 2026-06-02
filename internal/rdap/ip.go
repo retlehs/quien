@@ -135,20 +135,16 @@ func QueryIP(ip string) (*IPInfo, error) {
 	)
 
 	// Run optional enrichment lookups concurrently to avoid serial latency.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		if names, err := net.LookupAddr(ip); err == nil {
 			for _, n := range names {
 				hostnames = append(hostnames, strings.TrimSuffix(n, "."))
 			}
 		}
-	}()
+	})
 
 	if asn > 0 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			// PeeringDB is best-effort enrichment; keep base IP lookup resilient.
 			if p, err := peeringdb.LookupASN(asn); err == nil {
 				peerNet = p
@@ -156,11 +152,9 @@ func QueryIP(ip string) (*IPInfo, error) {
 			} else {
 				pdbStatus = "Lookup failed"
 			}
-		}()
+		})
 	} else {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			// BGP fallback is best-effort when RDAP lacks ASN/autnum data.
 			b, err := bgp.LookupIP(ip)
 			if err != nil {
@@ -178,7 +172,7 @@ func QueryIP(ip string) (*IPInfo, error) {
 			} else {
 				pdbStatus = "Lookup failed"
 			}
-		}()
+		})
 	}
 	wg.Wait()
 

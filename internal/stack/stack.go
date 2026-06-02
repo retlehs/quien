@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -393,10 +394,8 @@ func parseExternalServices(r *Result, html string, siteDomain string) {
 		host := strings.ToLower(u.Host)
 
 		// Skip same-domain resources
-		for _, v := range siteVariants {
-			if host == v {
-				return
-			}
+		if slices.Contains(siteVariants, host) {
+			return
 		}
 
 		// Extract the registrable domain (last two parts for most, three for co.uk etc.)

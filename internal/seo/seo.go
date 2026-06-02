@@ -25,13 +25,13 @@ type Result struct {
 }
 
 type Indexability struct {
-	RobotsTxt    string `json:"robots_txt,omitempty"`
-	RobotsMeta   string `json:"robots_meta,omitempty"`
-	XRobotsTag   string `json:"x_robots_tag,omitempty"`
-	Canonical    string `json:"canonical,omitempty"`
-	Indexable    bool   `json:"indexable"`
-	SitemapFound bool   `json:"sitemap_found"`
-	SitemapURL   string `json:"sitemap_url,omitempty"`
+	RobotsTxt    string   `json:"robots_txt,omitempty"`
+	RobotsMeta   string   `json:"robots_meta,omitempty"`
+	XRobotsTag   string   `json:"x_robots_tag,omitempty"`
+	Canonical    string   `json:"canonical,omitempty"`
+	Indexable    bool     `json:"indexable"`
+	SitemapFound bool     `json:"sitemap_found"`
+	SitemapURLs  []string `json:"sitemap_urls,omitempty"`
 }
 
 type OnPage struct {
@@ -166,19 +166,21 @@ func fetchRobotsTxt(r *Result, client *http.Client, baseURL string) {
 			url := strings.TrimSpace(trimmed[len("sitemap:"):])
 			if url != "" {
 				r.Indexability.SitemapFound = true
-				r.Indexability.SitemapURL = url
-				return
+				r.Indexability.SitemapURLs = append(r.Indexability.SitemapURLs, url)
 			}
 		}
 	}
+	if r.Indexability.SitemapFound {
+		return
+	}
 
-	// Try well-known sitemap path if not in robots.txt
+	// Try well-known sitemap path if none declared / found in robots.txt
 	sitemapResp, err := client.Head(baseURL + "/sitemap.xml")
 	if err == nil {
 		_ = sitemapResp.Body.Close()
 		if sitemapResp.StatusCode == 200 {
 			r.Indexability.SitemapFound = true
-			r.Indexability.SitemapURL = baseURL + "/sitemap.xml"
+			r.Indexability.SitemapURLs = append(r.Indexability.SitemapURLs, baseURL+"/sitemap.xml")
 		}
 	}
 }

@@ -76,12 +76,12 @@ func renderIndexability(b *strings.Builder, idx *seo.Indexability) {
 	}
 
 	if idx.SitemapFound {
-		b.WriteString(row("Sitemap", foundStyle.Render("found")))
-		if idx.SitemapURL != "" {
-			b.WriteString(row("", dimStyle.Render(idx.SitemapURL)))
+		b.WriteString(row("Sitemaps", foundStyle.Render("found")))
+		for _, u := range idx.SitemapURLs {
+			b.WriteString(row("", dimStyle.Render(u)))
 		}
 	} else {
-		b.WriteString(row("Sitemap", notFoundStyle.Render("not found")))
+		b.WriteString(row("Sitemaps", notFoundStyle.Render("not found")))
 	}
 }
 

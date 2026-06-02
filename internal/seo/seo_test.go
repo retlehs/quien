@@ -2,6 +2,7 @@ package seo
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -365,6 +366,50 @@ func TestParseIndexability_Canonical(t *testing.T) {
 	}
 	if r.Indexability.Canonical != "https://example.com/page" {
 		t.Errorf("Canonical = %q", r.Indexability.Canonical)
+	}
+}
+
+func TestFetchRobotsTxt_MultipleSitemaps(t *testing.T) {
+	const robotsTxt = `# Robots.txt v1.0
+User-agent: *
+Disallow: /search/
+Disallow: /cart
+Allow: /store/
+
+Sitemap: https://www.example.com/store/sitemap-index.xml
+Sitemap: https://www.example.com/surface/surface.index.xml
+Sitemap: https://www.example.com/sitemaps/ai/sitemapindex.xml
+`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.Path == "/robots.txt" {
+			_, _ = w.Write([]byte(robotsTxt))
+			return
+		}
+		http.NotFound(w, req)
+	}))
+	defer srv.Close()
+
+	r := &Result{}
+	fetchRobotsTxt(r, srv.Client(), srv.URL)
+
+	if r.Indexability.RobotsTxt != "found" {
+		t.Fatalf("RobotsTxt = %q, want \"found\"", r.Indexability.RobotsTxt)
+	}
+	if !r.Indexability.SitemapFound {
+		t.Fatal("SitemapFound = false, want true")
+	}
+	want := []string{
+		"https://www.example.com/store/sitemap-index.xml",
+		"https://www.example.com/surface/surface.index.xml",
+		"https://www.example.com/sitemaps/ai/sitemapindex.xml",
+	}
+	if len(r.Indexability.SitemapURLs) != len(want) {
+		t.Fatalf("got %d sitemaps, want %d: %v", len(r.Indexability.SitemapURLs), len(want), r.Indexability.SitemapURLs)
+	}
+	for i, w := range want {
+		if r.Indexability.SitemapURLs[i] != w {
+			t.Errorf("SitemapURLs[%d] = %q, want %q", i, r.Indexability.SitemapURLs[i], w)
+		}
 	}
 }
 

@@ -120,7 +120,7 @@ func extensionSection(domain string) string {
 
 func normalizeJPRS(raw string) string {
 	var b strings.Builder
-	for _, line := range strings.Split(raw, "\n") {
+	for line := range strings.SplitSeq(raw, "\n") {
 		if m := jprsLabelLine.FindStringSubmatch(line); m != nil {
 			label := strings.TrimSpace(m[1])
 			if rename, ok := jprsLabelRenames[strings.ToLower(label)]; ok {

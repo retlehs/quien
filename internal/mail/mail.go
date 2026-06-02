@@ -45,15 +45,15 @@ type BIMIRecord struct {
 }
 
 type VMCInfo struct {
-	Subject    string    `json:",omitempty"`
-	Issuer     string    `json:",omitempty"`
-	NotBefore  time.Time `json:",omitempty"`
-	NotAfter   time.Time `json:",omitempty"`
-	IsExpired  bool      `json:",omitempty"`
-	DaysLeft   int       `json:",omitempty"`
-	ChainValid bool      `json:",omitempty"`
-	HasBIMIEKU bool      `json:",omitempty"`
-	Error      string    `json:",omitempty"`
+	Subject    string `json:",omitempty"`
+	Issuer     string `json:",omitempty"`
+	NotBefore  time.Time
+	NotAfter   time.Time
+	IsExpired  bool   `json:",omitempty"`
+	DaysLeft   int    `json:",omitempty"`
+	ChainValid bool   `json:",omitempty"`
+	HasBIMIEKU bool   `json:",omitempty"`
+	Error      string `json:",omitempty"`
 }
 
 const timeout = 5 * time.Second

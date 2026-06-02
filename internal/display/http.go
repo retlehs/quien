@@ -85,10 +85,7 @@ func RenderHTTP(result *httpinfo.Result) string {
 		val := h.Value
 
 		// Wrap long values
-		availWidth := maxName - len(h.Name) - 2
-		if availWidth < 20 {
-			availWidth = 20
-		}
+		availWidth := max(maxName-len(h.Name)-2, 20)
 
 		if len(val) <= availWidth {
 			fmt.Fprintf(&b, "  %s  %s\n", name, headerValStyle.Render(val))

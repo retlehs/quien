@@ -6,9 +6,9 @@ type DomainInfo struct {
 	DomainName       string            `json:"domain_name"`
 	Registrar        string            `json:"registrar,omitempty"`
 	Status           []string          `json:"status,omitempty"`
-	CreatedDate      time.Time         `json:"created_date,omitempty"`
-	UpdatedDate      time.Time         `json:"updated_date,omitempty"`
-	ExpiryDate       time.Time         `json:"expiry_date,omitempty"`
+	CreatedDate      time.Time         `json:"created_date"`
+	UpdatedDate      time.Time         `json:"updated_date"`
+	ExpiryDate       time.Time         `json:"expiry_date"`
 	Nameservers      []string          `json:"nameservers,omitempty"`
 	DNSSEC           bool              `json:"dnssec"`
 	Contacts         []Contact         `json:"contacts,omitempty"`

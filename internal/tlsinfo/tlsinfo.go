@@ -45,10 +45,7 @@ func Lookup(domain string) (*CertInfo, error) {
 	cert := certs[0]
 	now := time.Now()
 
-	daysLeft := int(cert.NotAfter.Sub(now).Hours() / 24)
-	if daysLeft < 0 {
-		daysLeft = 0
-	}
+	daysLeft := max(int(cert.NotAfter.Sub(now).Hours()/24), 0)
 
 	info := &CertInfo{
 		Subject:   cert.Subject.CommonName,

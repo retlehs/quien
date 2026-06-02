@@ -66,10 +66,10 @@ func Parse(raw string) model.DomainInfo {
 
 	// Clean up status values (remove URLs appended after space, e.g. "clientDeleteProhibited https://...")
 	for i, s := range info.Status {
-		if idx := strings.Index(s, " "); idx != -1 {
-			rest := strings.TrimSpace(s[idx+1:])
+		if before, after, ok := strings.Cut(s, " "); ok {
+			rest := strings.TrimSpace(after)
 			if strings.HasPrefix(rest, "http://") || strings.HasPrefix(rest, "https://") {
-				info.Status[i] = s[:idx]
+				info.Status[i] = before
 			}
 		}
 	}
@@ -88,9 +88,9 @@ func extractKeyValues(raw string) map[string][]string {
 			continue
 		}
 		indented := strings.HasPrefix(line, "\t") || strings.HasPrefix(line, " ")
-		idx := strings.Index(trimmed, ":")
+		before, after, ok := strings.Cut(trimmed, ":")
 
-		if idx == -1 {
+		if !ok {
 			if indented && section != "" {
 				// Indented value-only line inside a section (e.g. nic.it nameservers)
 				kv[section] = append(kv[section], trimmed)
@@ -106,11 +106,11 @@ func extractKeyValues(raw string) map[string][]string {
 			continue
 		}
 
-		key := strings.ToLower(strings.TrimSpace(trimmed[:idx]))
-		value := strings.TrimSpace(trimmed[idx+1:])
+		key := strings.ToLower(strings.TrimSpace(before))
+		value := strings.TrimSpace(after)
 		if value == "" {
 			// "Section:" header — subsequent indented lines belong to it
-			section = normalizeSection(trimmed[:idx])
+			section = normalizeSection(before)
 			continue
 		}
 		// Always record the bare key. If we're inside a section, also record

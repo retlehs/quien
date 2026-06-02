@@ -160,7 +160,7 @@ func fetchRobotsTxt(r *Result, client *http.Client, baseURL string) {
 		return
 	}
 
-	for _, line := range strings.Split(string(body), "\n") {
+	for line := range strings.SplitSeq(string(body), "\n") {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(strings.ToLower(trimmed), "sitemap:") {
 			url := strings.TrimSpace(trimmed[len("sitemap:"):])

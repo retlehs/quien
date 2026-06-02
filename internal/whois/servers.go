@@ -43,7 +43,7 @@ func queryIANA(tld string) string {
 		return ""
 	}
 
-	for _, line := range strings.Split(resp, "\n") {
+	for line := range strings.SplitSeq(resp, "\n") {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(strings.ToLower(line), "refer:") {
 			parts := strings.SplitN(line, ":", 2)

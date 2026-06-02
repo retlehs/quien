@@ -184,10 +184,7 @@ func RenderJSON(info model.DomainInfo) string {
 
 func row(label, value string) string {
 	l := labelStyle.Render(label)
-	maxVal := valueWidth()
-	if maxVal < 10 {
-		maxVal = 10
-	}
+	maxVal := max(valueWidth(), 10)
 
 	// If value fits on one line, simple case
 	plainLen := lipgloss.Width(value)
@@ -254,10 +251,7 @@ func dateRow(label string, t time.Time) string {
 
 func section(title string) string {
 	label := sectionStyle.Render(title)
-	lineWidth := innerWidth() - lipgloss.Width(title) - 1
-	if lineWidth < 4 {
-		lineWidth = 4
-	}
+	lineWidth := max(innerWidth()-lipgloss.Width(title)-1, 4)
 	line := dividerStyle.Render(strings.Repeat("─", lineWidth))
 	return label + " " + line + "\n"
 }

@@ -85,3 +85,22 @@ jobs:
           cache: true
       - name: Test
         run: go test ./...
+
+  modernize:
+    name: Modernize
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Check modernized code
+        run: |
+          go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@latest -fix ./...
+          if ! git diff --exit-code; then
+            echo "Code is not modernized. Run the following locally and commit the changes:"
+            echo "  go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@latest -fix ./..."
+            exit 1
+          fi

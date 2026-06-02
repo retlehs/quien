@@ -101,7 +101,7 @@ func LooksEmpty(resp string) bool {
 		return true
 	}
 	// Check if there's at least one key: value pair with domain info
-	for _, line := range strings.Split(resp, "\n") {
+	for line := range strings.SplitSeq(resp, "\n") {
 		line = strings.TrimSpace(line)
 		l := strings.ToLower(line)
 		if strings.HasPrefix(l, "domain name:") ||
@@ -124,7 +124,7 @@ func LooksEmpty(resp string) bool {
 }
 
 func extractReferral(resp string) string {
-	for _, line := range strings.Split(resp, "\n") {
+	for line := range strings.SplitSeq(resp, "\n") {
 		line = strings.TrimSpace(line)
 		lower := strings.ToLower(line)
 		if strings.HasPrefix(lower, "registrar whois server:") ||

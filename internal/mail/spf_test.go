@@ -170,7 +170,7 @@ func TestAnalyzeSPF_OverLimit(t *testing.T) {
 	root := strings.Builder{}
 	root.WriteString("v=spf1")
 	stub := newStub()
-	for i := 0; i < 11; i++ {
+	for i := range 11 {
 		d := "leaf" + string(rune('a'+i)) + ".example.com"
 		root.WriteString(" include:" + d)
 		stub.set(d, "v=spf1 -all")

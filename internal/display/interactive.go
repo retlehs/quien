@@ -646,14 +646,8 @@ func (m Model) View() tea.View {
 		return altView("\n  Loading...")
 	}
 
-	boxWidth := displayWidth
-	if boxWidth > m.width {
-		boxWidth = m.width
-	}
-	innerW := boxWidth - 2 - (boxPadH * 2)
-	if innerW < 10 {
-		innerW = 10
-	}
+	boxWidth := min(displayWidth, m.width)
+	innerW := max(boxWidth-2-(boxPadH*2), 10)
 
 	pad := strings.Repeat(" ", boxPadH)
 	border := borderFg.Render("│")
@@ -676,7 +670,7 @@ func (m Model) View() tea.View {
 	vpLines := strings.Split(vpView, "\n")
 
 	vpHeight := m.viewport.Height()
-	for i := 0; i < vpHeight; i++ {
+	for i := range vpHeight {
 		line := ""
 		if i < len(vpLines) {
 			line = vpLines[i]
@@ -927,10 +921,7 @@ func (m Model) viewportSize() (int, int) {
 	if m.isIP {
 		chrome = 3 // top border + bottom border + footer (no tab bar)
 	}
-	vpHeight := m.height - chrome
-	if vpHeight < 1 {
-		vpHeight = 1
-	}
+	vpHeight := max(m.height-chrome, 1)
 	return innerWidth(), vpHeight
 }
 

@@ -32,7 +32,7 @@ func loadBIMIRoots() *x509.CertPool {
 // parseBIMI splits a "v=BIMI1; l=...; a=..." record into its fields.
 func parseBIMI(raw string) *BIMIRecord {
 	rec := &BIMIRecord{Raw: raw}
-	for _, part := range strings.Split(raw, ";") {
+	for part := range strings.SplitSeq(raw, ";") {
 		part = strings.TrimSpace(part)
 		k, v, ok := strings.Cut(part, "=")
 		if !ok {

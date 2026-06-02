@@ -15,7 +15,7 @@ func Do[T any](fn func() (T, error)) (T, error) {
 	var result T
 	var err error
 
-	for attempt := 0; attempt < MaxAttempts; attempt++ {
+	for attempt := range MaxAttempts {
 		result, err = fn()
 		if err == nil {
 			return result, nil

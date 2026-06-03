@@ -3,7 +3,11 @@ package retry
 import (
 	"errors"
 	"testing"
+	"time"
 )
+
+// Avoid backoff delays during tests.
+func init() { sleep = func(time.Duration) {} }
 
 func TestDo_SucceedsFirstTry(t *testing.T) {
 	calls := 0

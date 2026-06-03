@@ -9,6 +9,8 @@ const (
 	BaseDelay   = 1 * time.Second
 )
 
+var sleep = time.Sleep
+
 // Do retries fn up to MaxAttempts times with exponential backoff.
 // Returns the result from the first successful call, or the last error.
 func Do[T any](fn func() (T, error)) (T, error) {
@@ -23,7 +25,7 @@ func Do[T any](fn func() (T, error)) (T, error) {
 
 		// Don't sleep after the last attempt
 		if attempt < MaxAttempts-1 {
-			time.Sleep(BaseDelay * time.Duration(1<<uint(attempt)))
+			sleep(BaseDelay * time.Duration(1<<attempt))
 		}
 	}
 

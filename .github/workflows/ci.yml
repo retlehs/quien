@@ -22,7 +22,7 @@ concurrency:
 jobs:
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
@@ -34,9 +34,9 @@ jobs:
         with:
           version: latest
 
-  build:
-    name: Build
-    runs-on: ubuntu-latest
+  checks:
+    name: Checks
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
@@ -44,19 +44,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Build
-        run: go build ./...
 
-  fmt:
-    name: Format
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: false
       - name: Check formatting
         run: |
           unformatted=$(gofmt -l .)
@@ -66,42 +54,6 @@ jobs:
             exit 1
           fi
 
-  vet:
-    name: Vet
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: true
-      - name: Vet
-        run: go vet ./...
-
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: true
-      - name: Test
-        run: go test ./...
-
-  modernize:
-    name: Modernize
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: true
       - name: Check modernized code
         run: |
           go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@latest -fix ./...
@@ -110,3 +62,6 @@ jobs:
             echo "  go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@latest -fix ./..."
             exit 1
           fi
+          
+      - name: Test
+        run: go test ./...

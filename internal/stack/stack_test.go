@@ -1,6 +1,7 @@
 package stack
 
 import (
+	"net/http"
 	"slices"
 	"strings"
 	"testing"
@@ -94,6 +95,60 @@ func TestDetectWPPlugins(t *testing.T) {
 				if sliceContains(r.Plugins, nw) {
 					t.Errorf("unexpected plugin %q in %v", nw, r.Plugins)
 				}
+			}
+		})
+	}
+}
+
+func TestDetectCMS(t *testing.T) {
+	tests := []struct {
+		name string
+		html string
+		want string
+	}{
+		{
+			name: "Magento from data-mage-init",
+			html: `<div data-mage-init='{"someWidget":{}}'></div>`,
+			want: "Magento",
+		},
+		{
+			name: "Magento from static path",
+			html: `<link href="/static/frontend/magento/luma/en_US/css/styles.css">`,
+			want: "Magento",
+		},
+		{
+			name: "Magento not detected from image MIME types",
+			html: `<link rel="icon" type="image/png" href="/fav.png"><img src="data:image/svg+xml;base64,abc">`,
+			want: "",
+		},
+		{
+			name: "PrestaShop from module path",
+			html: `<link href="/modules/ps_shoppingcart/css/cart.css">`,
+			want: "PrestaShop",
+		},
+		{
+			name: "PrestaShop not detected from prose mention",
+			html: `<p>We migrated from prestashop last year.</p>`,
+			want: "",
+		},
+		{
+			name: "Webflow from data-wf-page",
+			html: `<html data-wf-page="abc123" data-wf-site="def456">`,
+			want: "Webflow",
+		},
+		{
+			name: "Webflow not detected from a link to webflow.com",
+			html: `<a href="https://webflow.com">Built with Webflow</a>`,
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &Result{}
+			detectCMS(r, http.Header{}, strings.ToLower(tt.html))
+			if r.CMS != tt.want {
+				t.Errorf("expected CMS %q, got %q", tt.want, r.CMS)
 			}
 		})
 	}

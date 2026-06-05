@@ -219,12 +219,18 @@ func detectCMS(r *Result, h http.Header, html string) {
 		return
 	}
 	// Magento
-	if strings.Contains(html, "/static/frontend/magento/") || strings.Contains(html, "magento_") || strings.Contains(html, "mage/") {
+	if strings.Contains(html, "/static/frontend/magento/") ||
+		strings.Contains(html, "magento_") ||
+		strings.Contains(html, "data-mage-init") ||
+		strings.Contains(html, "x-magento-init") ||
+		strings.Contains(html, "mage/cookies") {
 		r.CMS = "Magento"
 		return
 	}
 	// PrestaShop
-	if strings.Contains(html, "prestashop") || strings.Contains(html, "/modules/ps_") {
+	if strings.Contains(html, "/modules/ps_") ||
+		strings.Contains(html, "var prestashop") ||
+		strings.Contains(html, `id="prestashop"`) {
 		r.CMS = "PrestaShop"
 		return
 	}
@@ -234,7 +240,10 @@ func detectCMS(r *Result, h http.Header, html string) {
 		return
 	}
 	// Webflow
-	if strings.Contains(html, "webflow.com") || strings.Contains(html, "wf-page") {
+	if strings.Contains(html, "data-wf-page") ||
+		strings.Contains(html, "data-wf-site") ||
+		strings.Contains(html, "wf-page") ||
+		strings.Contains(html, "website-files.com") {
 		r.CMS = "Webflow"
 		return
 	}

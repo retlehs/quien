@@ -186,6 +186,16 @@ func TestDetectJSLibs(t *testing.T) {
 			want: []string{"Next.js"},
 		},
 		{
+			name: "Preact from submodule import",
+			html: `<script type="importmap">{"imports":{"preact/hooks":"https://esm.sh/preact/hooks"}}</script>`,
+			want: []string{"Preact"},
+		},
+		{
+			name: "Preact not detected from a tag URL",
+			html: `<a href="/tags/preact/" class="tag">#Preact</a>`,
+			want: nil,
+		},
+		{
 			name: "no false positives",
 			html: `<html><body><p>Just a simple page</p></body></html>`,
 			want: nil,

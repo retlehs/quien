@@ -324,7 +324,7 @@ func detectJSLibs(r *Result, html string) {
 		{"Livewire", []string{"livewire/livewire", " wire:"}},
 		{"Next.js", []string{"__next_data__", "/_next/"}},
 		{"Nuxt", []string{"__nuxt", "/_nuxt/"}},
-		{"Preact", []string{"preact.min.js", "preact/"}},
+		{"Preact", []string{"preact.min.js", "preact/hooks", "preact/compat", "/preact@"}},
 		{"React", []string{"react.production.min.js", "react-dom", "data-reactroot", "_reactlistening"}},
 		{"Remix", []string{"__remix"}},
 		{"Solid.js", []string{"solid-js", "_$createcomponent"}},

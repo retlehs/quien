@@ -7,27 +7,23 @@ import (
 
 	"github.com/retlehs/quien/internal/dns"
 	"github.com/retlehs/quien/internal/retry"
-	"github.com/spf13/cobra"
 )
 
-var dnsCmd = &cobra.Command{
-	Use:   "dns <domain>",
-	Short: "DNS record lookup (JSON output)",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		domain := normalizeDomain(args[0])
-		records, err := retry.Do(func() (*dns.Records, error) {
-			return dns.Lookup(domain)
-		})
-		if err != nil {
-			return fmt.Errorf("DNS lookup failed: %w", err)
-		}
-		return printJSON(records)
-	},
-}
-
 func init() {
-	rootCmd.AddCommand(dnsCmd)
+	register(&command{
+		name:  "dns",
+		short: "DNS record lookup (JSON output)",
+		run: func(args []string) error {
+			domain := normalizeDomain(args[0])
+			records, err := retry.Do(func() (*dns.Records, error) {
+				return dns.Lookup(domain)
+			})
+			if err != nil {
+				return fmt.Errorf("DNS lookup failed: %w", err)
+			}
+			return printJSON(records)
+		},
+	})
 }
 
 func normalizeDomain(s string) string {

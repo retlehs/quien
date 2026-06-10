@@ -77,7 +77,7 @@ func parseInterspersed(fs *flag.FlagSet, args []string) ([]string, error) {
 }
 
 func printUsage(w io.Writer) {
-	fmt.Fprintf(w, "%s\n\nUsage:\n  quien [domain or IP] [flags]\n  quien [command]\n\nAvailable Commands:\n", longDescription)
+	_, _ = fmt.Fprintf(w, "%s\n\nUsage:\n  quien [domain or IP] [flags]\n  quien [command]\n\nAvailable Commands:\n", longDescription)
 
 	type entry struct{ name, short string }
 	entries := []entry{{"help", "Help about quien"}}
@@ -90,10 +90,10 @@ func printUsage(w io.Writer) {
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].name < entries[j].name })
 	for _, e := range entries {
-		fmt.Fprintf(w, "  %-12s%s\n", e.name, e.short)
+		_, _ = fmt.Fprintf(w, "  %-12s%s\n", e.name, e.short)
 	}
 
-	fmt.Fprintf(w, `
+	_, _ = fmt.Fprintf(w, `
 Flags:
       --dkim-selector strings   DKIM selector(s) to probe in addition to the built-in common list (repeatable, comma-separated). Overrides %s
   -h, --help                    help for quien

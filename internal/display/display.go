@@ -297,8 +297,20 @@ func relativeTime(t time.Time) string {
 	now := time.Now()
 	diff := now.Sub(t)
 
-	if diff < 0 {
+	future := diff < 0
+	if future {
 		diff = -diff
+	}
+	if diff < 24*time.Hour {
+		return "today"
+	}
+	if diff < 48*time.Hour {
+		if future {
+			return "tomorrow"
+		}
+		return "yesterday"
+	}
+	if future {
 		return formatDuration(diff) + " from now"
 	}
 	return formatDuration(diff) + " ago"
@@ -307,32 +319,22 @@ func relativeTime(t time.Time) string {
 func formatDuration(d time.Duration) string {
 	days := int(d.Hours() / 24)
 
-	if days < 1 {
-		return "today"
-	}
-	if days == 1 {
-		return "1 day"
-	}
 	if days < 30 {
-		return fmt.Sprintf("%d days", days)
+		return plural(days, "day")
 	}
 	if days < 365 {
-		months := days / 30
-		if months == 1 {
-			return "1 month"
-		}
-		return fmt.Sprintf("%d months", months)
+		return plural(days/30, "month")
 	}
-	years := days / 365
-	remainingMonths := (days % 365) / 30
-	if years == 1 && remainingMonths == 0 {
-		return "1 year"
+	s := plural(days/365, "year")
+	if months := (days % 365) / 30; months > 0 {
+		s += ", " + plural(months, "month")
 	}
-	if remainingMonths == 0 {
-		return fmt.Sprintf("%d years", years)
+	return s
+}
+
+func plural(n int, unit string) string {
+	if n == 1 {
+		return "1 " + unit
 	}
-	if years == 1 {
-		return fmt.Sprintf("1 year, %d months", remainingMonths)
-	}
-	return fmt.Sprintf("%d years, %d months", years, remainingMonths)
+	return fmt.Sprintf("%d %ss", n, unit)
 }

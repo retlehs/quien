@@ -13,8 +13,10 @@ func TestRelativeTime(t *testing.T) {
 		t    time.Time
 		want string
 	}{
-		{"today", now, "today ago"},
-		{"yesterday", now.Add(-24 * time.Hour), "1 day ago"},
+		{"today", now, "today"},
+		{"later today", now.Add(1 * time.Hour), "today"},
+		{"yesterday", now.Add(-24 * time.Hour), "yesterday"},
+		{"tomorrow", now.Add(36 * time.Hour), "tomorrow"},
 		{"5 days ago", now.Add(-5 * 24 * time.Hour), "5 days ago"},
 		{"2 months ago", now.Add(-60 * 24 * time.Hour), "2 months ago"},
 		{"1 year ago", now.Add(-365 * 24 * time.Hour), "1 year ago"},
@@ -36,13 +38,13 @@ func TestFormatDuration(t *testing.T) {
 		days int
 		want string
 	}{
-		{0, "today"},
 		{1, "1 day"},
+		{2, "2 days"},
 		{15, "15 days"},
 		{30, "1 month"},
 		{90, "3 months"},
 		{365, "1 year"},
-		{400, "1 year, 1 months"},
+		{400, "1 year, 1 month"},
 		{730, "2 years"},
 		{800, "2 years, 2 months"},
 	}

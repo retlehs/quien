@@ -50,10 +50,11 @@ var (
 	faint  = ac("#8C959F", "#4E4E4E")
 
 	// Secondary palette tokens used across multiple files.
-	accent  = ac("#2E59A1", "#87AFFF") // nameservers, headers, DNS records
-	muted   = ac("#57606A", "#A8A8A8") // TXT records, redirect URLs, mail records
-	border  = ac("#D0D7DE", "#3A3A3A") // box and panel borders
-	tabGray = ac("#57606A", "#A0A0A0") // inactive tab text
+	accent   = ac("#2E59A1", "#87AFFF") // nameservers, headers, DNS records
+	muted    = ac("#57606A", "#A8A8A8") // TXT records, redirect URLs, mail records
+	mutedAlt = ac("#8C959F", "#7A7A7A") // alternate TXT shade for zebra striping
+	border   = ac("#D0D7DE", "#3A3A3A") // box and panel borders
+	tabGray  = ac("#57606A", "#A0A0A0") // inactive tab text
 
 	// Styles
 	domainStyle = lipgloss.NewStyle().
@@ -84,6 +85,9 @@ var (
 
 	txtStyle = lipgloss.NewStyle().
 			Foreground(muted)
+
+	txtStyleAlt = lipgloss.NewStyle().
+			Foreground(mutedAlt)
 
 	dimStyle = lipgloss.NewStyle().
 			Foreground(dim)

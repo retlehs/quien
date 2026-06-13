@@ -77,13 +77,18 @@ func RenderDNS(records *dns.Records) string {
 		hasRecords = true
 		b.WriteString("\n")
 		b.WriteString(section("TXT"))
-		for _, txt := range records.TXT {
+		for i, txt := range records.TXT {
 			// Truncate long TXT records for display
 			display := txt
 			if len(display) > 60 {
 				display = display[:57] + "..."
 			}
-			b.WriteString(row("", txtStyle.Render(display)))
+			// Alternate shades so adjacent records are easy to tell apart.
+			style := txtStyle
+			if i%2 == 1 {
+				style = txtStyleAlt
+			}
+			b.WriteString(row("", style.Render(display)))
 		}
 	}
 

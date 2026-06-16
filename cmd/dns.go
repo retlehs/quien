@@ -3,9 +3,9 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/retlehs/quien/internal/dns"
+	"github.com/retlehs/quien/internal/resolver"
 	"github.com/retlehs/quien/internal/retry"
 	"github.com/spf13/cobra"
 )
@@ -31,7 +31,7 @@ func init() {
 }
 
 func normalizeDomain(s string) string {
-	return strings.TrimSuffix(strings.ToLower(strings.TrimSpace(s)), ".")
+	return resolver.NormalizeDomain(s)
 }
 
 func printJSON(v any) error {

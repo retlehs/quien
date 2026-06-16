@@ -4,8 +4,24 @@ import (
 	"fmt"
 	"strings"
 
+	"golang.org/x/net/idna"
 	"golang.org/x/net/publicsuffix"
 )
+
+// Used for parsing and validatin IDNA domains
+var idnaProfile = idna.New(idna.MapForLookup(), idna.BidiRule(), idna.Transitional(false))
+
+// convert IDNA to ASCII
+func toASCII(s string) string {
+	if ascii, err := idnaProfile.ToASCII(s); err == nil && ascii != "" {
+		return ascii
+	}
+	return strings.ToLower(s)
+}
+
+func NormalizeDomain(s string) string {
+	return toASCII(strings.TrimSuffix(strings.TrimSpace(s), "."))
+}
 
 // RegistrableDomain returns the effective TLD+1 for s — the registrable
 // domain that a WHOIS/RDAP registry will actually answer queries for.
@@ -16,6 +32,7 @@ import (
 // "co.jp", anything without a dot) return an error so callers can reject them
 // cleanly instead of dispatching a doomed WHOIS query.
 func RegistrableDomain(s string) (string, error) {
+	s = toASCII(s)
 	if len(s) < 3 || len(s) > 253 {
 		return "", fmt.Errorf("%q is not a valid domain", s)
 	}

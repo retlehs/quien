@@ -70,7 +70,7 @@ var rootCmd = &cobra.Command{
 			return runLookup(input, isIP)
 		}
 
-		input := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(args[0])), ".")
+		input := normalizeDomain(args[0])
 
 		isIP := net.ParseIP(input) != nil
 
@@ -97,6 +97,7 @@ var rootCmd = &cobra.Command{
 
 func runLookup(input string, isIP bool) error {
 	if !isIP {
+		input = normalizeDomain(input)
 		if _, err := resolver.RegistrableDomain(input); err != nil {
 			return err
 		}

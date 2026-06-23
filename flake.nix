@@ -1,5 +1,6 @@
 {
-  description = "A better WHOIS lookup tool";
+  description = "A better whois and domain intelligence toolkit";
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
   inputs.flake-utils.url = "github:numtide/flake-utils";
 
   outputs = {
@@ -18,7 +19,7 @@
               buildGoModule (finalAttrs: {
                 pname = "quien";
                 version = "0.11.0";
-                vendorHash = "sha256-aErscLglpLDXH5jxEt6KFDlBH2JjtXDcX4J3YrL5ouI=";
+                vendorHash = "sha256-7gP6eN+lF90kSltQMHkVTTanogEAtbLnENdZTF9f98c=";
                 src = ./.;
 
                 env.CGO_ENABLED = 0;

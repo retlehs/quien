@@ -20,7 +20,7 @@ build() {
   cd "$pkgname-$pkgver"
   export CGO_ENABLED=0
   export GOMODCACHE="$srcdir/gomod"
-  export GOFLAGS="-buildmode=pie -trimpath -mod=readonly -modcacherw"
+  export GOFLAGS="-trimpath -mod=readonly -modcacherw"
   go build -ldflags="-s -w -X main.version=$pkgver" -o "$pkgname"
 }
 

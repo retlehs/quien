@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/retlehs/quien/internal/dnsutil"
 	"github.com/retlehs/quien/internal/mail"
 )
 
@@ -21,13 +22,13 @@ const SPFExpandAll = -1
 // mxResolutions (optional) adds expanded IP/rDNS info under each MX host.
 // spfDepth controls how many layers of include/redirect to render in the SPF
 // tree: 0 = top-level terms only, N = N nested layers, SPFExpandAll = full.
-func RenderMail(records *mail.Records, mxResolutions []mail.MXResolution, spfDepth int) string {
+func RenderMail(records *mail.Records, mxResolutions []dnsutil.HostResolution, spfDepth int) string {
 	var b strings.Builder
 
 	b.WriteString(domainSectionTitle("Mail Configuration"))
 	b.WriteString("\n\n")
 
-	resolutionByHost := map[string]mail.MXResolution{}
+	resolutionByHost := map[string]dnsutil.HostResolution{}
 	for _, r := range mxResolutions {
 		resolutionByHost[r.Host] = r
 	}
@@ -44,8 +45,8 @@ func RenderMail(records *mail.Records, mxResolutions []mail.MXResolution, spfDep
 				} else {
 					for _, ip := range res.IPs {
 						line := recordStyle.Render("  " + ip.IP)
-						if ip.PTR != "" {
-							line += "  " + dimStyle.Render("("+ip.PTR+")")
+						if len(ip.PTRs) > 0 {
+							line += "  " + dimStyle.Render("("+strings.Join(ip.PTRs, ", ")+")")
 						}
 						b.WriteString(row("", line))
 					}

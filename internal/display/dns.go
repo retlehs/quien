@@ -6,10 +6,12 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/retlehs/quien/internal/dns"
+	"github.com/retlehs/quien/internal/dnsutil"
 )
 
-// RenderDNS returns a lipgloss-styled string for DNS records.
-func RenderDNS(records *dns.Records) string {
+// RenderDNS returns a lipgloss-styled string for DNS records. nsResolutions
+// (optional) adds expanded IP/rDNS info under each NS host.
+func RenderDNS(records *dns.Records, nsResolutions []dnsutil.HostResolution) string {
 	var b strings.Builder
 
 	b.WriteString(domainSectionTitle("DNS Records"))
@@ -68,8 +70,25 @@ func RenderDNS(records *dns.Records) string {
 		hasRecords = true
 		b.WriteString("\n")
 		b.WriteString(section("NS"))
+		resolutionByHost := map[string]dnsutil.HostResolution{}
+		for _, r := range nsResolutions {
+			resolutionByHost[r.Host] = r
+		}
 		for _, ns := range records.NS {
 			b.WriteString(row("", nsStyle.Render(ns)))
+			if res, ok := resolutionByHost[ns]; ok {
+				if res.Err != "" {
+					b.WriteString(row("", dimStyle.Render("  "+notFoundStyle.Render(res.Err))))
+				} else {
+					for _, ip := range res.IPs {
+						line := recordStyle.Render("  " + ip.IP)
+						if len(ip.PTRs) > 0 {
+							line += "  " + dimStyle.Render("("+strings.Join(ip.PTRs, ", ")+")")
+						}
+						b.WriteString(row("", line))
+					}
+				}
+			}
 		}
 	}
 

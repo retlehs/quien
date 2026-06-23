@@ -11,16 +11,17 @@ import (
 )
 
 type Records struct {
-	A      []string
-	AAAA   []string
-	CNAME  []string
-	HTTPS  []HTTPSRecord
-	MX     []MXRecord
-	NS     []string
-	TXT    []string
-	PTR    []PTRRecord
-	SOA    *SOARecord
-	DNSSEC bool
+	A          []string
+	AAAA       []string
+	CNAME      []string
+	HTTPS      []HTTPSRecord
+	MX         []MXRecord
+	NS         []string
+	NSResolved []dnsutil.HostResolution `json:",omitempty"`
+	TXT        []string
+	PTR        []PTRRecord
+	SOA        *SOARecord
+	DNSSEC     bool
 }
 
 // HTTPSRecord is an HTTPS (SVCB-family) resource record (RFC 9460).

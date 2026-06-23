@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/retlehs/quien/internal/dns"
+	"github.com/retlehs/quien/internal/dnsutil"
 )
 
 func TestRenderHTTPSRecord(t *testing.T) {
@@ -52,5 +53,35 @@ func TestRenderHTTPSRecord(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestRenderDNSNSResolution(t *testing.T) {
+	records := &dns.Records{NS: []string{"ns1.example.com", "ns2.example.com"}}
+	resolutions := []dnsutil.HostResolution{
+		{Host: "ns1.example.com", IPs: []dnsutil.HostIP{
+			{IP: "192.0.2.1", PTRs: []string{"a.example.com", "b.example.com"}},
+		}},
+		{Host: "ns2.example.com", Err: "no such host"},
+	}
+
+	out := RenderDNS(records, resolutions)
+
+	for _, want := range []string{"192.0.2.1", "a.example.com", "b.example.com", "no such host"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("RenderDNS output missing %q\n%s", want, out)
+		}
+	}
+}
+
+func TestRenderDNSWithoutResolution(t *testing.T) {
+	// Passing no resolutions renders the bare NS list (default behavior).
+	records := &dns.Records{NS: []string{"ns1.example.com"}}
+	out := RenderDNS(records, nil)
+	if !strings.Contains(out, "ns1.example.com") {
+		t.Errorf("RenderDNS output missing NS host\n%s", out)
+	}
+	if strings.Contains(out, "192.0.2") {
+		t.Errorf("RenderDNS rendered resolved IPs without resolutions\n%s", out)
 	}
 }

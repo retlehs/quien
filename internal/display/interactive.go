@@ -79,8 +79,11 @@ type Model struct {
 	ipInfo       *rdap.IPInfo
 	whoisErr     error
 	dnsData      *dns.Records
+	nsResolved   []dnsutil.HostResolution
+	nsExpanded   bool
+	nsResolving  bool
 	mailData     *mail.Records
-	mxResolved   []mail.MXResolution
+	mxResolved   []dnsutil.HostResolution
 	mxExpanded   bool
 	mxResolving  bool
 	spfDepth     int  // 0 = top-level only, N = N layers, SPFExpandAll = full
@@ -147,7 +150,11 @@ type mailResultMsg struct {
 }
 
 type mxResolveMsg struct {
-	resolutions []mail.MXResolution
+	resolutions []dnsutil.HostResolution
+}
+
+type nsResolveMsg struct {
+	resolutions []dnsutil.HostResolution
 }
 
 type tlsResultMsg struct {
@@ -289,6 +296,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.updateViewport()
 				return m, resolveFirstIP(m.domain, m.dnsData)
 			}
+			if !m.isIP && m.active == tabDNS && m.dnsData != nil && len(m.dnsData.NS) > 0 {
+				if m.nsResolved != nil {
+					m.nsExpanded = !m.nsExpanded
+					m.updateViewport()
+					return m, nil
+				}
+				if !m.nsResolving {
+					m.nsResolving = true
+					m.nsExpanded = true
+					m.updateViewport()
+					hosts := append([]string(nil), m.dnsData.NS...)
+					return m, resolveNS(hosts)
+				}
+			}
 			if !m.isIP && m.active == tabMail && m.mailData != nil && len(m.mailData.MX) > 0 {
 				if m.mxResolved != nil {
 					m.mxExpanded = !m.mxExpanded
@@ -386,6 +407,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case mxResolveMsg:
 		m.mxResolving = false
 		m.mxResolved = msg.resolutions
+		m.updateViewport()
+		return m, nil
+
+	case nsResolveMsg:
+		m.nsResolving = false
+		m.nsResolved = msg.resolutions
 		m.updateViewport()
 		return m, nil
 
@@ -587,7 +614,7 @@ func (m Model) contentForTab(t tab) string {
 		} else if m.mailErr != nil {
 			return errorBox("Mail Lookup Failed", m.mailErr)
 		} else if m.mailData != nil {
-			var res []mail.MXResolution
+			var res []dnsutil.HostResolution
 			if m.mxExpanded {
 				res = m.mxResolved
 			}
@@ -599,7 +626,11 @@ func (m Model) contentForTab(t tab) string {
 		} else if m.dnsErr != nil {
 			return errorBox("DNS Lookup Failed", m.dnsErr)
 		} else if m.dnsData != nil {
-			return RenderDNS(m.dnsData)
+			var res []dnsutil.HostResolution
+			if m.nsExpanded {
+				res = m.nsResolved
+			}
+			return RenderDNS(m.dnsData, res)
 		}
 	case tabTLS:
 		if m.loading {
@@ -706,6 +737,15 @@ func (m Model) View() tea.View {
 		footerParts = append(footerParts, "i failed")
 	} else if !m.isIP && m.active == tabWhois {
 		footerParts = append(footerParts, "i inspect ip")
+	} else if !m.isIP && m.active == tabDNS && m.dnsData != nil && len(m.dnsData.NS) > 0 {
+		switch {
+		case m.nsResolving:
+			footerParts = append(footerParts, "i resolving...")
+		case m.nsExpanded:
+			footerParts = append(footerParts, "i collapse")
+		default:
+			footerParts = append(footerParts, "i resolve ns")
+		}
 	} else if !m.isIP && m.active == tabMail && m.mailData != nil && len(m.mailData.MX) > 0 {
 		switch {
 		case m.mxResolving:
@@ -940,7 +980,13 @@ func fetchWhois(domain string) tea.Cmd {
 
 func resolveMX(hosts []string) tea.Cmd {
 	return func() tea.Msg {
-		return mxResolveMsg{resolutions: mail.ResolveMX(hosts)}
+		return mxResolveMsg{resolutions: dnsutil.ResolveHosts(hosts)}
+	}
+}
+
+func resolveNS(hosts []string) tea.Cmd {
+	return func() tea.Msg {
+		return nsResolveMsg{resolutions: dnsutil.ResolveHosts(hosts)}
 	}
 }
 

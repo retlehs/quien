@@ -5,6 +5,7 @@ import (
 	"net"
 
 	"github.com/retlehs/quien/internal/dns"
+	"github.com/retlehs/quien/internal/dnsutil"
 	"github.com/retlehs/quien/internal/httpinfo"
 	"github.com/retlehs/quien/internal/mail"
 	"github.com/retlehs/quien/internal/resolver"
@@ -56,11 +57,17 @@ var allCmd = &cobra.Command{
 
 		// DNS
 		if records, err := retry.Do(func() (*dns.Records, error) { return dns.Lookup(input) }); err == nil {
+			if allResolveFlag {
+				records.NSResolved = dnsutil.ResolveHosts(records.NS)
+			}
 			result.DNS = records
 		}
 
 		// Mail
 		if records, err := retry.Do(func() (*mail.Records, error) { return mail.Lookup(input) }); err == nil {
+			if allResolveFlag {
+				records.MXResolved = dnsutil.ResolveHosts(mxHosts(records.MX))
+			}
 			result.Mail = records
 		}
 
@@ -84,6 +91,9 @@ var allCmd = &cobra.Command{
 	},
 }
 
+var allResolveFlag bool
+
 func init() {
+	allCmd.Flags().BoolVar(&allResolveFlag, "resolve", false, "resolve NS and MX hostnames to IP addresses and reverse DNS")
 	rootCmd.AddCommand(allCmd)
 }

@@ -294,26 +294,47 @@ func renderContact(c model.Contact) string {
 }
 
 func relativeTime(t time.Time) string {
-	now := time.Now()
-	diff := now.Sub(t)
+	return relativeTimeFrom(time.Now(), t)
+}
 
-	future := diff < 0
+// relativeTimeFrom labels t relative to now. Because dateRow shows only the
+// calendar date (YYYY-MM-DD), the today/yesterday/tomorrow labels are based on
+// the calendar-day difference rather than elapsed hours — otherwise a time less
+// than 24h away but on a different date would be mislabeled (e.g. a row reading
+// "2026-06-24  today" when it is still the 23rd).
+func relativeTimeFrom(now, t time.Time) string {
+	days := calendarDaysBetween(t, now) // positive when t is in the past
+	future := days < 0
 	if future {
-		diff = -diff
+		days = -days
 	}
-	if diff < 24*time.Hour {
+	switch days {
+	case 0:
 		return "today"
-	}
-	if diff < 48*time.Hour {
+	case 1:
 		if future {
 			return "tomorrow"
 		}
 		return "yesterday"
 	}
+	d := formatDuration(time.Duration(days) * 24 * time.Hour)
 	if future {
-		return formatDuration(diff) + " from now"
+		return d + " from now"
 	}
-	return formatDuration(diff) + " ago"
+	return d + " ago"
+}
+
+// calendarDaysBetween returns the difference in calendar days between the civil
+// dates of t and now (positive when now is the later date). Each timestamp's
+// date is taken in its own location — matching what dateRow prints via
+// t.Format("2006-01-02") — then mapped to a UTC day index, so the count reflects
+// the displayed dates exactly regardless of time zone or DST.
+func calendarDaysBetween(t, now time.Time) int {
+	dayIndex := func(x time.Time) int {
+		y, m, d := x.Date()
+		return int(time.Date(y, m, d, 0, 0, 0, 0, time.UTC).Unix() / 86400)
+	}
+	return dayIndex(now) - dayIndex(t)
 }
 
 func formatDuration(d time.Duration) string {

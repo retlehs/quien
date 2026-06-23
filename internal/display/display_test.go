@@ -6,7 +6,9 @@ import (
 )
 
 func TestRelativeTime(t *testing.T) {
-	now := time.Now()
+	// Fixed reference instant so calendar-day labels are deterministic
+	// regardless of the time of day the test runs.
+	now := time.Date(2026, 6, 23, 12, 0, 0, 0, time.UTC)
 
 	tests := []struct {
 		name string
@@ -14,20 +16,27 @@ func TestRelativeTime(t *testing.T) {
 		want string
 	}{
 		{"today", now, "today"},
-		{"later today", now.Add(1 * time.Hour), "today"},
-		{"yesterday", now.Add(-24 * time.Hour), "yesterday"},
-		{"tomorrow", now.Add(36 * time.Hour), "tomorrow"},
-		{"5 days ago", now.Add(-5 * 24 * time.Hour), "5 days ago"},
-		{"2 months ago", now.Add(-60 * 24 * time.Hour), "2 months ago"},
-		{"1 year ago", now.Add(-365 * 24 * time.Hour), "1 year ago"},
-		{"future", now.Add(95 * 24 * time.Hour), "3 months from now"},
+		{"earlier today", now.Add(-8 * time.Hour), "today"},
+		{"later today", now.Add(8 * time.Hour), "today"},
+		{"yesterday", now.AddDate(0, 0, -1), "yesterday"},
+		{"tomorrow", now.AddDate(0, 0, 1), "tomorrow"},
+		// <24h away but on an adjacent calendar date: labeled by date, not hours.
+		{"late yesterday within 24h", now.Add(-20 * time.Hour), "yesterday"},
+		{"early tomorrow within 24h", now.Add(20 * time.Hour), "tomorrow"},
+		// Different zone: civil date 06-24 (what dateRow prints) is the next day
+		// even though the instant is only ~3h after now.
+		{"next date in another zone", time.Date(2026, 6, 24, 0, 0, 0, 0, time.FixedZone("JST", 9*3600)), "tomorrow"},
+		{"5 days ago", now.AddDate(0, 0, -5), "5 days ago"},
+		{"2 months ago", now.AddDate(0, 0, -60), "2 months ago"},
+		{"1 year ago", now.AddDate(0, 0, -365), "1 year ago"},
+		{"future", now.AddDate(0, 0, 95), "3 months from now"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := relativeTime(tt.t)
+			got := relativeTimeFrom(now, tt.t)
 			if got != tt.want {
-				t.Errorf("relativeTime() = %q, want %q", got, tt.want)
+				t.Errorf("relativeTimeFrom() = %q, want %q", got, tt.want)
 			}
 		})
 	}

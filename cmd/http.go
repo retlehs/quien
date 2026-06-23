@@ -13,7 +13,10 @@ var httpCmd = &cobra.Command{
 	Short: "HTTP header and redirect lookup (JSON output)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		domain := normalizeDomain(args[0])
+		domain, err := normalizeDomain(args[0])
+		if err != nil {
+			return err
+		}
 		result, err := retry.Do(func() (*httpinfo.Result, error) {
 			return httpinfo.Lookup(domain)
 		})

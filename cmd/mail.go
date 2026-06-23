@@ -13,7 +13,10 @@ var mailCmd = &cobra.Command{
 	Short: "Mail configuration lookup — MX, SPF, DMARC, DKIM, BIMI (JSON output)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		domain := normalizeDomain(args[0])
+		domain, err := normalizeDomain(args[0])
+		if err != nil {
+			return err
+		}
 		records, err := retry.Do(func() (*mail.Records, error) {
 			return mail.Lookup(domain)
 		})

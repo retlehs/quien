@@ -22,7 +22,11 @@ func TestNormalizeDomain(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := NormalizeDomain(tt.in); got != tt.want {
+			got, err := NormalizeDomain(tt.in)
+			if err != nil {
+				t.Fatalf("NormalizeDomain(%q) returned error: %v", tt.in, err)
+			}
+			if got != tt.want {
 				t.Errorf("NormalizeDomain(%q) = %q, want %q", tt.in, got, tt.want)
 			}
 		})
@@ -31,12 +35,26 @@ func TestNormalizeDomain(t *testing.T) {
 
 func TestNormalizeDomainIDNProducesASCII(t *testing.T) {
 	for _, in := range []string{"ébay.it", "iphone.セール", "zwick.ελ"} {
-		got := NormalizeDomain(in)
+		got, err := NormalizeDomain(in)
+		if err != nil {
+			t.Errorf("NormalizeDomain(%q) returned error: %v", in, err)
+			continue
+		}
 		if utf8.RuneCountInString(got) != len(got) {
 			t.Errorf("NormalizeDomain(%q) = %q, want all-ASCII", in, got)
 		}
 		if !strings.Contains(got, "xn--") {
 			t.Errorf("NormalizeDomain(%q) = %q, want a punycode (xn--) label", in, got)
+		}
+	}
+}
+
+// Malformed IDNs (here a Bidi-rule violation) must be rejected rather than
+// passed through as raw Unicode, otherwise a doomed lookup gets dispatched.
+func TestNormalizeDomainRejectsInvalidIDN(t *testing.T) {
+	for _, in := range []string{"صلa1.com", "xn--a.com"} {
+		if got, err := NormalizeDomain(in); err == nil {
+			t.Errorf("NormalizeDomain(%q) = %q, want error", in, got)
 		}
 	}
 }

@@ -30,7 +30,10 @@ var allCmd = &cobra.Command{
 	Short: "Run all lookups combined (JSON output)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		input := normalizeDomain(args[0])
+		input, err := normalizeDomain(args[0])
+		if err != nil {
+			return err
+		}
 		result := allResult{}
 
 		isIP := net.ParseIP(input) != nil

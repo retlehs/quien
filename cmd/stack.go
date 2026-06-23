@@ -13,7 +13,10 @@ var stackCmd = &cobra.Command{
 	Short: "Detect technology stack — CMS, frameworks, libraries (JSON output)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		domain := normalizeDomain(args[0])
+		domain, err := normalizeDomain(args[0])
+		if err != nil {
+			return err
+		}
 		result, err := retry.Do(func() (*stack.Result, error) {
 			return stack.Detect(domain)
 		})

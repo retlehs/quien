@@ -2,25 +2,38 @@ package resolver
 
 import (
 	"fmt"
+	"net"
 	"strings"
 
 	"golang.org/x/net/idna"
 	"golang.org/x/net/publicsuffix"
 )
 
-// Used for parsing and validatin IDNA domains
+// idnaProfile parses and validates domains under the IDNA2008 "lookup" rules,
+// mapping case/width and enforcing the Bidi rule before converting to ASCII.
 var idnaProfile = idna.New(idna.MapForLookup(), idna.BidiRule(), idna.Transitional(false))
 
-// convert IDNA to ASCII
-func toASCII(s string) string {
-	if ascii, err := idnaProfile.ToASCII(s); err == nil && ascii != "" {
-		return ascii
-	}
-	return strings.ToLower(s)
+// toASCII converts a domain to its ASCII (punycode) form, returning an error
+// for input that isn't a valid domain under IDNA lookup rules.
+func toASCII(s string) (string, error) {
+	return idnaProfile.ToASCII(s)
 }
 
-func NormalizeDomain(s string) string {
-	return toASCII(strings.TrimSuffix(strings.TrimSpace(s), "."))
+// NormalizeDomain trims surrounding whitespace and a trailing dot from s and
+// returns its lowercased ASCII (punycode) form. IP literals pass through
+// unchanged — they aren't domains and IDNA rejects the colons in IPv6 — while
+// any other input that isn't a valid domain under IDNA lookup rules yields an
+// error so callers can reject it instead of dispatching a doomed lookup.
+func NormalizeDomain(s string) (string, error) {
+	s = strings.TrimSuffix(strings.TrimSpace(s), ".")
+	if net.ParseIP(s) != nil {
+		return strings.ToLower(s), nil
+	}
+	ascii, err := toASCII(s)
+	if err != nil {
+		return "", fmt.Errorf("%q is not a valid domain", s)
+	}
+	return ascii, nil
 }
 
 // RegistrableDomain returns the effective TLD+1 for s — the registrable
@@ -32,7 +45,11 @@ func NormalizeDomain(s string) string {
 // "co.jp", anything without a dot) return an error so callers can reject them
 // cleanly instead of dispatching a doomed WHOIS query.
 func RegistrableDomain(s string) (string, error) {
-	s = toASCII(s)
+	ascii, err := toASCII(s)
+	if err != nil {
+		return "", fmt.Errorf("%q is not a valid domain", s)
+	}
+	s = ascii
 	if len(s) < 3 || len(s) > 253 {
 		return "", fmt.Errorf("%q is not a valid domain", s)
 	}

@@ -15,7 +15,10 @@ var dnsCmd = &cobra.Command{
 	Short: "DNS record lookup (JSON output)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		domain := normalizeDomain(args[0])
+		domain, err := normalizeDomain(args[0])
+		if err != nil {
+			return err
+		}
 		records, err := retry.Do(func() (*dns.Records, error) {
 			return dns.Lookup(domain)
 		})
@@ -30,7 +33,7 @@ func init() {
 	rootCmd.AddCommand(dnsCmd)
 }
 
-func normalizeDomain(s string) string {
+func normalizeDomain(s string) (string, error) {
 	return resolver.NormalizeDomain(s)
 }
 

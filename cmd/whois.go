@@ -13,7 +13,10 @@ var whoisCmd = &cobra.Command{
 	Short: "WHOIS/RDAP registration lookup (JSON output)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		input := normalizeDomain(args[0])
+		input, err := normalizeDomain(args[0])
+		if err != nil {
+			return err
+		}
 		if net.ParseIP(input) != nil {
 			info, err := resolver.LookupIP(input)
 			if err != nil {

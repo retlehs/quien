@@ -82,6 +82,7 @@ type Model struct {
 	nsResolved   []dnsutil.HostResolution
 	nsExpanded   bool
 	nsResolving  bool
+	txtExpanded  bool
 	mailData     *mail.Records
 	mxResolved   []dnsutil.HostResolution
 	mxExpanded   bool
@@ -328,6 +329,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		case "x":
+			if !m.isIP && m.active == tabDNS && m.dnsData != nil && len(m.dnsData.TXT) > 0 {
+				m.txtExpanded = !m.txtExpanded
+				m.updateViewport()
+				return m, nil
+			}
 			if !m.isIP && m.active == tabMail && m.mailHasSPFTree() {
 				max := spfMaxDepth(m.spfRoot())
 				switch {
@@ -342,6 +348,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		case "X":
+			if !m.isIP && m.active == tabDNS && m.dnsData != nil && len(m.dnsData.TXT) > 0 {
+				m.txtExpanded = !m.txtExpanded
+				m.updateViewport()
+				return m, nil
+			}
 			if !m.isIP && m.active == tabMail && m.mailHasSPFTree() {
 				max := spfMaxDepth(m.spfRoot())
 				if m.spfDepth == SPFExpandAll || m.spfDepth >= max {
@@ -630,7 +641,7 @@ func (m Model) contentForTab(t tab) string {
 			if m.nsExpanded {
 				res = m.nsResolved
 			}
-			return RenderDNS(m.dnsData, res)
+			return RenderDNS(m.dnsData, res, m.txtExpanded)
 		}
 	case tabTLS:
 		if m.loading {
@@ -754,6 +765,13 @@ func (m Model) View() tea.View {
 			footerParts = append(footerParts, "i collapse")
 		default:
 			footerParts = append(footerParts, "i resolve mx")
+		}
+	}
+	if !m.isIP && m.active == tabDNS && m.dnsData != nil && len(m.dnsData.TXT) > 0 {
+		if m.txtExpanded {
+			footerParts = append(footerParts, "x/X truncate txt")
+		} else {
+			footerParts = append(footerParts, "x/X full txt")
 		}
 	}
 	if !m.isIP && m.active == tabMail && m.mailHasSPFTree() {

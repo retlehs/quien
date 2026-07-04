@@ -10,6 +10,7 @@ import (
 	"github.com/retlehs/quien/internal/mail"
 	"github.com/retlehs/quien/internal/resolver"
 	"github.com/retlehs/quien/internal/retry"
+	"github.com/retlehs/quien/internal/security"
 	"github.com/retlehs/quien/internal/seo"
 	"github.com/retlehs/quien/internal/stack"
 	"github.com/retlehs/quien/internal/tlsinfo"
@@ -17,13 +18,14 @@ import (
 )
 
 type allResult struct {
-	WHOIS *any              `json:"whois,omitempty"`
-	DNS   *dns.Records      `json:"dns,omitempty"`
-	Mail  *mail.Records     `json:"mail,omitempty"`
-	TLS   *tlsinfo.CertInfo `json:"tls,omitempty"`
-	HTTP  *httpinfo.Result  `json:"http,omitempty"`
-	Stack *stack.Result     `json:"stack,omitempty"`
-	SEO   *seo.Result       `json:"seo,omitempty"`
+	WHOIS    *any              `json:"whois,omitempty"`
+	DNS      *dns.Records      `json:"dns,omitempty"`
+	Mail     *mail.Records     `json:"mail,omitempty"`
+	TLS      *tlsinfo.CertInfo `json:"tls,omitempty"`
+	HTTP     *httpinfo.Result  `json:"http,omitempty"`
+	Stack    *stack.Result     `json:"stack,omitempty"`
+	SEO      *seo.Result       `json:"seo,omitempty"`
+	Security *security.Result  `json:"security,omitempty"`
 }
 
 var allCmd = &cobra.Command{
@@ -85,6 +87,11 @@ var allCmd = &cobra.Command{
 		if page, err := retry.Do(func() (*stack.PageData, error) { return stack.FetchPage(input) }); err == nil {
 			result.Stack = stack.DetectFromPage(page.Headers, page.Body, input)
 			result.SEO = seo.AnalyzeWithPage(page, input)
+		}
+
+		// Security.txt
+		if sec, err := retry.Do(func() (*security.Result, error) { return security.Lookup(input) }); err == nil {
+			result.Security = sec
 		}
 
 		return printJSON(result)

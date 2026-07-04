@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strings"
 	"testing"
 
 	"github.com/retlehs/quien/internal/dns"
+	"github.com/retlehs/quien/internal/security"
 )
 
 func TestResolveFirstIPValuePrefersCachedDNSRecords(t *testing.T) {
@@ -114,5 +116,70 @@ func TestResolveFirstIPValueUsesAAAAWhenANotPresent(t *testing.T) {
 	}
 	if ip != "2001:db8::2" {
 		t.Fatalf("resolveFirstIPValue() = %q, want %q", ip, "2001:db8::2")
+	}
+}
+
+func TestRenderSecurityNotFound(t *testing.T) {
+	t.Parallel()
+
+	result := &security.Result{Found: false}
+	output := RenderSecurity(result)
+
+	if !strings.Contains(output, "No security.txt found") {
+		t.Fatalf("expected 'No security.txt found', got:\n%s", output)
+	}
+}
+
+func TestRenderSecurityFoundWithFields(t *testing.T) {
+	t.Parallel()
+
+	result := &security.Result{
+		Found:      true,
+		URL:        "https://example.com/.well-known/security.txt",
+		StatusCode: 200,
+		Content:    "Contact: mailto:security@example.com\nPolicy: https://example.com/policy\n",
+		Fields: map[string][]string{
+			"contact": {"mailto:security@example.com"},
+			"policy":  {"https://example.com/policy"},
+		},
+	}
+	output := RenderSecurity(result)
+
+	if !strings.Contains(output, "security.txt") {
+		t.Fatal("expected title 'security.txt'")
+	}
+	if !strings.Contains(output, "Location") {
+		t.Fatal("expected section 'Location'")
+	}
+	if !strings.Contains(output, "example.com/.well-known/security.txt") {
+		t.Fatal("expected URL in output")
+	}
+	if !strings.Contains(output, "Fields") {
+		t.Fatal("expected section 'Fields'")
+	}
+	if !strings.Contains(output, "mailto:security@example.com") {
+		t.Fatal("expected contact value in output")
+	}
+	if !strings.Contains(output, "Raw Content") {
+		t.Fatal("expected section 'Raw Content'")
+	}
+}
+
+func TestRenderSecurityFoundNoFields(t *testing.T) {
+	t.Parallel()
+
+	result := &security.Result{
+		Found:   true,
+		URL:     "https://example.com/.well-known/security.txt",
+		Content: "# just a comment\n\n",
+		Fields:  map[string][]string{},
+	}
+	output := RenderSecurity(result)
+
+	if !strings.Contains(output, "security.txt") {
+		t.Fatal("expected title 'security.txt'")
+	}
+	if !strings.Contains(output, "Raw Content") {
+		t.Fatal("expected section 'Raw Content'")
 	}
 }

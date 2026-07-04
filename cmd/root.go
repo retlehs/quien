@@ -22,7 +22,7 @@ var dkimSelectorFlag []string
 var rootCmd = &cobra.Command{
 	Use:          "quien [domain or IP]",
 	Short:        "A better whois and domain intelligence toolkit",
-	Long:         "Inspect a domain or IP across registration (WHOIS/RDAP), DNS, mail authentication (SPF/DMARC/DKIM/BIMI), TLS, HTTP, SEO, and tech stack — interactive TUI by default, JSON via subcommands.",
+	Long:         "Inspect a domain or IP across registration (WHOIS/RDAP), DNS, mail authentication (SPF/DMARC/DKIM/BIMI), TLS, HTTP, SEO, security.txt and tech stack — interactive TUI by default, JSON via subcommands.",
 	Args:         cobra.MaximumNArgs(1),
 	SilenceUsage: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {

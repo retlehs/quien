@@ -132,6 +132,21 @@ func TestDetectCMS(t *testing.T) {
 			want: "",
 		},
 		{
+			name: "EmDash from media path",
+			html: `<img src="/_emdash/api/media/file/01HXEXAMPLEMEDIAID0000000A.webp">`,
+			want: "EmDash",
+		},
+		{
+			name: "EmDash from URL-encoded Astro image path",
+			html: `<img src="/_image?href=%2F_emdash%2Fapi%2Fmedia%2Ffile%2F01HXEXAMPLEMEDIAID0000000B.png&w=640">`,
+			want: "EmDash",
+		},
+		{
+			name: "EmDash not detected from prose mention",
+			html: `<p>Use an emdash — not a hyphen.</p>`,
+			want: "",
+		},
+		{
 			name: "Webflow from data-wf-page",
 			html: `<html data-wf-page="abc123" data-wf-site="def456">`,
 			want: "Webflow",

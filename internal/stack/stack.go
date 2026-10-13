@@ -190,6 +190,12 @@ func detectCMS(r *Result, h http.Header, html string) {
 		r.CMS = "Wix"
 		return
 	}
+	// EmDash — media and API routes live under /_emdash/, which also appears
+	// URL-encoded in Astro image URLs (/_image?href=%2F_emdash%2F...)
+	if strings.Contains(html, "/_emdash/") || strings.Contains(html, "%2f_emdash%2f") {
+		r.CMS = "EmDash"
+		return
+	}
 	// Ghost
 	if m := ghostVersionRe.FindStringSubmatch(html); len(m) > 0 {
 		r.CMS = "Ghost"

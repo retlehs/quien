@@ -65,7 +65,7 @@ func TestRenderDNSNSResolution(t *testing.T) {
 		{Host: "ns2.example.com", Err: "no such host"},
 	}
 
-	out := RenderDNS(records, resolutions)
+	out := RenderDNS(records, resolutions, false)
 
 	for _, want := range []string{"192.0.2.1", "a.example.com", "b.example.com", "no such host"} {
 		if !strings.Contains(out, want) {
@@ -77,7 +77,7 @@ func TestRenderDNSNSResolution(t *testing.T) {
 func TestRenderDNSWithoutResolution(t *testing.T) {
 	// Passing no resolutions renders the bare NS list (default behavior).
 	records := &dns.Records{NS: []string{"ns1.example.com"}}
-	out := RenderDNS(records, nil)
+	out := RenderDNS(records, nil, false)
 	if !strings.Contains(out, "ns1.example.com") {
 		t.Errorf("RenderDNS output missing NS host\n%s", out)
 	}

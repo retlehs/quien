@@ -11,7 +11,7 @@ import (
 
 // RenderDNS returns a lipgloss-styled string for DNS records. nsResolutions
 // (optional) adds expanded IP/rDNS info under each NS host.
-func RenderDNS(records *dns.Records, nsResolutions []dnsutil.HostResolution) string {
+func RenderDNS(records *dns.Records, nsResolutions []dnsutil.HostResolution, txtExpanded bool) string {
 	var b strings.Builder
 
 	b.WriteString(domainSectionTitle("DNS Records"))
@@ -97,15 +97,21 @@ func RenderDNS(records *dns.Records, nsResolutions []dnsutil.HostResolution) str
 		b.WriteString("\n")
 		b.WriteString(section("TXT"))
 		for i, txt := range records.TXT {
-			// Truncate long TXT records for display
-			display := txt
-			if len(display) > 60 {
-				display = display[:57] + "..."
-			}
 			// Alternate shades so adjacent records are easy to tell apart.
 			style := txtStyle
 			if i%2 == 1 {
 				style = txtStyleAlt
+			}
+			if txtExpanded {
+				for _, line := range wrapText(txt, valueWidth()) {
+					b.WriteString(row("", style.Render(line)))
+				}
+				continue
+			}
+			// Truncate long TXT records for display
+			display := txt
+			if len(display) > 60 {
+				display = display[:57] + "..."
 			}
 			b.WriteString(row("", style.Render(display)))
 		}

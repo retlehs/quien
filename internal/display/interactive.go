@@ -18,6 +18,7 @@ import (
 	"github.com/retlehs/quien/internal/rdap"
 	"github.com/retlehs/quien/internal/resolver"
 	"github.com/retlehs/quien/internal/retry"
+	"github.com/retlehs/quien/internal/security"
 	"github.com/retlehs/quien/internal/seo"
 	"github.com/retlehs/quien/internal/stack"
 	"github.com/retlehs/quien/internal/tlsinfo"
@@ -35,6 +36,7 @@ const (
 	tabHTTP
 	tabStack
 	tabSEO
+	tabSecurity
 )
 
 var (
@@ -92,12 +94,14 @@ type Model struct {
 	httpData     *httpinfo.Result
 	stackData    *stack.Result
 	seoData      *seo.Result
+	securityData *security.Result
 	dnsErr       error
 	mailErr      error
 	tlsErr       error
 	httpErr      error
 	stackErr     error
 	seoErr       error
+	securityErr  error
 	ipJumpErr    error
 	prevDomain   string
 	prevInfo     *model.DomainInfo
@@ -174,6 +178,11 @@ type stackResultMsg struct {
 
 type seoResultMsg struct {
 	result *seo.Result
+	err    error
+}
+
+type securityResultMsg struct {
+	result *security.Result
 	err    error
 }
 
@@ -464,6 +473,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateViewport()
 		return m, nil
 
+	case securityResultMsg:
+		m.setFetching(tabSecurity, false)
+		m.updateLoading()
+		m.securityData = msg.result
+		m.securityErr = msg.err
+		m.updateViewport()
+		return m, nil
+
 	case resolveIPResultMsg:
 		m.resolvingIP = false
 		m.updateLoading()
@@ -546,6 +563,10 @@ func (m *Model) activateTab(t tab) tea.Cmd {
 	case tabSEO:
 		if m.seoData == nil && m.seoErr == nil && !m.isFetching(tabSEO) {
 			cmd = fetchSEO(m.domain)
+		}
+	case tabSecurity:
+		if m.securityData == nil && m.securityErr == nil && !m.isFetching(tabSecurity) {
+			cmd = fetchSecurity(m.domain)
 		}
 	}
 	if cmd != nil {
@@ -663,6 +684,14 @@ func (m Model) contentForTab(t tab) string {
 			return errorBox("SEO Analysis Failed", m.seoErr)
 		} else if m.seoData != nil {
 			return RenderSEO(m.seoData)
+		}
+	case tabSecurity:
+		if m.loading {
+			return m.loadingText("Checking security.txt...")
+		} else if m.securityErr != nil {
+			return errorBox("security.txt Lookup Failed", m.securityErr)
+		} else if m.securityData != nil {
+			return RenderSecurity(m.securityData)
 		}
 	}
 	return ""
@@ -808,6 +837,7 @@ func (m Model) tabList() []struct {
 		{"h", "HTTP", tabHTTP},
 		{"e", "SEO", tabSEO},
 		{"t", "Stack", tabStack},
+		{"c", "Security", tabSecurity},
 	}
 }
 
@@ -1041,5 +1071,14 @@ func fetchTLS(domain string) tea.Cmd {
 			return tlsinfo.Lookup(domain)
 		})
 		return tlsResultMsg{cert: cert, err: err}
+	}
+}
+
+func fetchSecurity(domain string) tea.Cmd {
+	return func() tea.Msg {
+		result, err := retry.Do(func() (*security.Result, error) {
+			return security.Lookup(domain)
+		})
+		return securityResultMsg{result: result, err: err}
 	}
 }

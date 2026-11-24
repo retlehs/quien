@@ -8,6 +8,7 @@
   "schedule": ["before 9am on monday"],
   "prConcurrentLimit": 5,
   "postUpdateOptions": ["gomodTidy"],
+  "gitIgnoredAuthors": ["41898282+github-actions[bot]@users.noreply.github.com"],
   "lockFileMaintenance": {
     "enabled": true,
     "schedule": ["before 9am on monday"]

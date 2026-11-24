@@ -18,6 +18,15 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check flake version matches tag
+        if: ${{ !contains(github.ref_name, '-') }}
+        run: |
+          flake_version=$(sed -nE 's/^ *version = "([^"]+)";$/\1/p' flake.nix)
+          if [ "$flake_version" != "${GITHUB_REF_NAME#v}" ]; then
+            echo "::error file=flake.nix::flake.nix has version $flake_version but the tag is $GITHUB_REF_NAME. Bump it on main, then re-tag (see CONTRIBUTING.md)."
+            exit 1
+          fi
+
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod

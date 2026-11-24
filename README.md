@@ -36,6 +36,8 @@ yay -S quien
 nix shell github:retlehs/quien
 ```
 
+Pin a release with `nix shell github:retlehs/quien/v0.13.0` (or any later tag).
+
 **Go**
 
 ```

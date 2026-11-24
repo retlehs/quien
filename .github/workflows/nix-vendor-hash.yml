@@ -34,10 +34,12 @@ jobs:
       - name: Recompute vendorHash
         id: hash
         run: |
-          if nix build .#quien.goModules --no-link > build.log 2>&1; then
-            echo "vendorHash is up to date"
-            exit 0
-          fi
+          # Build against a fake hash so Nix can't reuse a stale go-modules
+          # output from the store; the mismatch error reports the real hash
+          current=$(sed -nE 's/^ *vendorHash = "([^"]*)";$/\1/p' flake.nix)
+          fake="sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+          sed -i -E "s|vendorHash = \"[^\"]*\";|vendorHash = \"$fake\";|" flake.nix
+          nix build .#quien.goModules --no-link > build.log 2>&1 || true
 
           got=$(sed -nE 's/^ *got: +(sha256-[A-Za-z0-9+/=]+)$/\1/p' build.log | head -n1)
           if [ -z "$got" ]; then
@@ -47,6 +49,11 @@ jobs:
           fi
 
           sed -i -E "s|vendorHash = \"[^\"]*\";|vendorHash = \"$got\";|" flake.nix
+          if [ "$got" = "$current" ]; then
+            echo "vendorHash is up to date"
+            exit 0
+          fi
+
           nix build .#default --print-build-logs
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
@@ -62,6 +69,10 @@ jobs:
           git push origin "HEAD:$BRANCH"
 
           # Pushes made with GITHUB_TOKEN don't trigger workflows, so
-          # dispatch the checks for the new commit explicitly
-          gh workflow run ci.yml --ref "$BRANCH"
-          gh workflow run nix.yml --ref "$BRANCH"
+          # dispatch the checks for the new commit explicitly. Branches cut
+          # before these workflows gained workflow_dispatch can't be
+          # dispatched; tick Renovate's rebase box on those instead.
+          for workflow in ci.yml nix.yml; do
+            gh workflow run "$workflow" --ref "$BRANCH" ||
+              echo "::warning::Couldn't dispatch $workflow on $BRANCH; rebase the PR to run checks"
+          done

@@ -36,18 +36,33 @@ jobs:
         with:
           ref: main
 
+      - uses: cachix/install-nix-action@382a9ed9481c7c1f94f68b72ef105b3417c73877 # v32.1.0
+
       - name: Bump flake version and tag
         id: tag
         env:
           VERSION: ${{ inputs.version }}
         run: |
-          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+          # Strict semver (no leading zeros), since GoReleaser and Go modules
+          # reject anything else and a pushed tag can never be taken back
+          num='(0|[1-9][0-9]*)'
+          pre_id='(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)'
+          if ! [[ "$VERSION" =~ ^$num\.$num\.$num(-$pre_id(\.$pre_id)*)?$ ]]; then
             echo "::error::Invalid version '$VERSION': expected X.Y.Z or X.Y.Z-prerelease, without a leading v"
             exit 1
           fi
           tag="v$VERSION"
           if git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then
             echo "::error::Tag $tag already exists"
+            exit 1
+          fi
+
+          # X.Y.Z must be newer than the latest stable release
+          core="${VERSION%%-*}"
+          latest=$(git ls-remote --tags --refs origin 'refs/tags/v*' \
+            | sed -nE 's|.*refs/tags/v([0-9]+\.[0-9]+\.[0-9]+)$|\1|p' | sort -V | tail -n1)
+          if [ -n "$latest" ] && { [ "$core" = "$latest" ] || [ "$(printf '%s\n' "$latest" "$core" | sort -V | tail -n1)" != "$core" ]; }; then
+            echo "::error::Version $VERSION isn't newer than the latest release v$latest"
             exit 1
           fi
 
@@ -60,10 +75,15 @@ jobs:
             if [ "$current" != "$VERSION" ]; then
               sed -i -E "s/^( *version = )\"[^\"]+\";$/\1\"$VERSION\";/" flake.nix
               git commit -am "quien: $current -> $VERSION"
-              git push origin HEAD:main
             fi
           fi
 
+          # Never tag a commit whose flake doesn't build (e.g. stale vendorHash)
+          nix build .#default --print-build-logs
+
+          if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
+            git push origin HEAD:main
+          fi
           git tag "$tag"
           git push origin "$tag"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
@@ -88,7 +108,7 @@ jobs:
         run: |
           flake_version=$(sed -nE 's/^ *version = "([^"]+)";$/\1/p' flake.nix)
           if [ "$flake_version" != "${TAG#v}" ]; then
-            echo "::error file=flake.nix::flake.nix has version $flake_version but the tag is $TAG. Delete the tag and release with the Release workflow's Run workflow button instead (see CONTRIBUTING.md)."
+            echo "::error file=flake.nix::flake.nix has version $flake_version but the tag is $TAG. Nothing was published. Release with the Release workflow instead (see CONTRIBUTING.md); only delete this tag if nothing has fetched it yet."
             exit 1
           fi
 
@@ -100,6 +120,12 @@ jobs:
       - name: Run tests
         run: go test ./...
 
+      - name: Find previous stable release
+        id: previous
+        run: |
+          # Base the changelog on the last stable release, not an rc of this one
+          echo "tag=$(git describe --tags --abbrev=0 --exclude '*-*' "$TAG^" 2>/dev/null || true)" >> "$GITHUB_OUTPUT"
+
       - name: GoReleaser
         uses: goreleaser/goreleaser-action@v7
         with:
@@ -108,6 +134,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_CURRENT_TAG: ${{ env.TAG }}
+          GORELEASER_PREVIOUS_TAG: ${{ steps.previous.outputs.tag }}
 
       - name: Extract version
         id: version
@@ -217,13 +244,16 @@ jobs:
           chmod +x aptrepo/install.sh
 
       - name: Sync apt repository to R2
+        if: ${{ !contains(env.TAG, '-') }}
         run: rclone sync ./aptrepo r2:quien-apt
 
       - name: Render AUR PKGBUILDs
         if: ${{ !contains(env.TAG, '-') }}
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          REPO: ${{ github.repository }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          SHA_SRC=$(curl -fsSL "https://github.com/${{ github.repository }}/archive/${{ env.TAG }}.tar.gz" | sha256sum | awk '{print $1}')
+          SHA_SRC=$(curl -fsSL "https://github.com/$REPO/archive/$TAG.tar.gz" | sha256sum | awk '{print $1}')
           SHA_AMD64=$(sha256sum dist/quien_linux_amd64.tar.gz | awk '{print $1}')
           SHA_ARM64=$(sha256sum dist/quien_linux_arm64.tar.gz | awk '{print $1}')
 

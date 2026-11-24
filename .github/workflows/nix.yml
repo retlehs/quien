@@ -1,0 +1,31 @@
+name: Nix
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # Lets nix-vendor-hash.yml re-run this check after it pushes a fix
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: cachix/install-nix-action@382a9ed9481c7c1f94f68b72ef105b3417c73877 # v32.1.0
+
+      - name: Build flake
+        run: nix build .#default --print-build-logs
+
+      - name: Smoke test
+        run: ./result/bin/quien --version

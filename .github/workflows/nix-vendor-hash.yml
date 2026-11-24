@@ -1,0 +1,78 @@
+name: Nix vendorHash
+
+# Renovate can't run Nix, so its go.mod/go.sum bumps leave the flake's
+# vendorHash stale. Recompute it on Renovate branches and push the fix.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - go.mod
+      - go.sum
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  update:
+    # Fork PRs get a read-only token; humans follow CONTRIBUTING.md instead
+    if: github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'renovate/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref }}
+
+      - uses: cachix/install-nix-action@382a9ed9481c7c1f94f68b72ef105b3417c73877 # v32.1.0
+
+      - name: Recompute vendorHash
+        id: hash
+        run: |
+          # Build against a fake hash so Nix can't reuse a stale go-modules
+          # output from the store; the mismatch error reports the real hash
+          current=$(sed -nE 's/^ *vendorHash = "([^"]*)";$/\1/p' flake.nix)
+          fake="sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+          sed -i -E "s|vendorHash = \"[^\"]*\";|vendorHash = \"$fake\";|" flake.nix
+          nix build .#quien.goModules --no-link > build.log 2>&1 || true
+
+          got=$(sed -nE 's/^ *got: +(sha256-[A-Za-z0-9+/=]+)$/\1/p' build.log | head -n1)
+          if [ -z "$got" ]; then
+            cat build.log
+            echo "::error::Go modules build failed for a reason other than a hash mismatch"
+            exit 1
+          fi
+
+          sed -i -E "s|vendorHash = \"[^\"]*\";|vendorHash = \"$got\";|" flake.nix
+          if [ "$got" = "$current" ]; then
+            echo "vendorHash is up to date"
+            exit 0
+          fi
+
+          nix build .#default --print-build-logs
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Push fix
+        if: steps.hash.outputs.changed == 'true'
+        env:
+          BRANCH: ${{ github.head_ref }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Update Nix vendorHash"
+          git push origin "HEAD:$BRANCH"
+
+          # Pushes made with GITHUB_TOKEN don't trigger workflows, so
+          # dispatch the checks for the new commit explicitly. Branches cut
+          # before these workflows gained workflow_dispatch can't be
+          # dispatched; tick Renovate's rebase box on those instead.
+          for workflow in ci.yml nix.yml; do
+            gh workflow run "$workflow" --ref "$BRANCH" ||
+              echo "::warning::Couldn't dispatch $workflow on $BRANCH; rebase the PR to run checks"
+          done

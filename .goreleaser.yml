@@ -35,5 +35,8 @@ nfpms:
       - deb
     bindir: /usr/bin
 
+release:
+  prerelease: auto
+
 changelog:
   sort: asc

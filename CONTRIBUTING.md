@@ -53,14 +53,14 @@ If `go.mod` requires a newer Go than the pinned `nixpkgs` provides, `nix build` 
 
 ## Releasing
 
-The flake builds the tree it lives in, so a release tag is only a correct, pinnable flake if `flake.nix` already has the new version when you tag. The release workflow fails before publishing anything if they don't match.
+Release from the **Release** workflow's **Run workflow** button, or:
 
 ```sh
-sed -i '' -E 's/version = "[^"]+";/version = "0.13.0";/' flake.nix
-git commit -am "quien: 0.12.0 -> 0.13.0"
-git push origin main
-git tag v0.13.0
-git push origin v0.13.0
+gh workflow run release.yml -f version=0.13.0
 ```
 
-Make sure the `Nix` workflow is green on `main` before tagging.
+The workflow bumps `version` in `flake.nix` on `main`, tags that commit, and publishes the release. Because the flake builds the tree it lives in, this keeps every release tag a correct, pinnable flake. Prereleases (e.g. `0.13.0-rc.1`) tag `main` without touching the flake.
+
+Pushing a tag by hand still works, but the release fails before publishing anything if `flake.nix` doesn't already have the matching version.
+
+Make sure the `Nix` workflow is green on `main` before releasing.

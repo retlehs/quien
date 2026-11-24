@@ -1,6 +1,17 @@
 name: Release
 
+# Run from the Actions tab or `gh workflow run release.yml -f version=X.Y.Z`.
+# The tag job bumps the flake version on main and creates the tag there, so
+# every release tag is a correct, pinnable flake. Pushing a tag by hand still
+# works, as long as flake.nix already has the matching version.
+
 on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release, without the leading v (e.g. 0.13.0)
+        required: true
+        type: string
   push:
     tags:
       - 'v*'
@@ -8,22 +19,76 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
-  release:
-    name: Release
+  tag:
+    name: Tag
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: main
+
+      - name: Bump flake version and tag
+        id: tag
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Invalid version '$VERSION': expected X.Y.Z or X.Y.Z-prerelease, without a leading v"
+            exit 1
+          fi
+          tag="v$VERSION"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then
+            echo "::error::Tag $tag already exists"
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Prereleases tag main as-is; the flake tracks stable versions only
+          if [[ "$VERSION" != *-* ]]; then
+            current=$(sed -nE 's/^ *version = "([^"]+)";$/\1/p' flake.nix)
+            if [ "$current" != "$VERSION" ]; then
+              sed -i -E "s/^( *version = )\"[^\"]+\";$/\1\"$VERSION\";/" flake.nix
+              git commit -am "quien: $current -> $VERSION"
+              git push origin HEAD:main
+            fi
+          fi
+
+          git tag "$tag"
+          git push origin "$tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+  release:
+    name: Release
+    needs: tag
+    # Runs after the tag job on dispatch, or on its own (tag job skipped) on tag push
+    if: ${{ !cancelled() && (needs.tag.result == 'success' || needs.tag.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TAG: ${{ needs.tag.outputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ env.TAG }}
           fetch-depth: 0
 
       - name: Check flake version matches tag
-        if: ${{ !contains(github.ref_name, '-') }}
+        if: ${{ !contains(env.TAG, '-') }}
         run: |
           flake_version=$(sed -nE 's/^ *version = "([^"]+)";$/\1/p' flake.nix)
-          if [ "$flake_version" != "${GITHUB_REF_NAME#v}" ]; then
-            echo "::error file=flake.nix::flake.nix has version $flake_version but the tag is $GITHUB_REF_NAME. Bump it on main, then re-tag (see CONTRIBUTING.md)."
+          if [ "$flake_version" != "${TAG#v}" ]; then
+            echo "::error file=flake.nix::flake.nix has version $flake_version but the tag is $TAG. Delete the tag and release with the Release workflow's Run workflow button instead (see CONTRIBUTING.md)."
             exit 1
           fi
 
@@ -42,10 +107,11 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GORELEASER_CURRENT_TAG: ${{ env.TAG }}
 
       - name: Extract version
         id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Install apt repo tooling
         run: sudo apt-get update && sudo apt-get install -y apt-utils gnupg rclone
@@ -76,7 +142,7 @@ jobs:
           EOF
 
       - name: Build signed apt repository
-        if: ${{ !contains(github.ref_name, '-') }}
+        if: ${{ !contains(env.TAG, '-') }}
         env:
           GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
         run: |
@@ -154,10 +220,10 @@ jobs:
         run: rclone sync ./aptrepo r2:quien-apt
 
       - name: Render AUR PKGBUILDs
-        if: ${{ !contains(github.ref_name, '-') }}
+        if: ${{ !contains(env.TAG, '-') }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          SHA_SRC=$(curl -fsSL "https://github.com/${{ github.repository }}/archive/${{ github.ref_name }}.tar.gz" | sha256sum | awk '{print $1}')
+          SHA_SRC=$(curl -fsSL "https://github.com/${{ github.repository }}/archive/${{ env.TAG }}.tar.gz" | sha256sum | awk '{print $1}')
           SHA_AMD64=$(sha256sum dist/quien_linux_amd64.tar.gz | awk '{print $1}')
           SHA_ARM64=$(sha256sum dist/quien_linux_arm64.tar.gz | awk '{print $1}')
 
@@ -171,7 +237,7 @@ jobs:
               packaging/aur/quien-bin/PKGBUILD.template > aur/quien-bin/PKGBUILD
 
       - name: Publish quien to AUR
-        if: ${{ !contains(github.ref_name, '-') }}
+        if: ${{ !contains(env.TAG, '-') }}
         uses: KSXGitHub/github-actions-deploy-aur@da03e160361ce01bf087e790b6ffd196d7dccff7 # v4.1.3
         with:
           pkgname: quien
@@ -179,11 +245,11 @@ jobs:
           commit_username: Ben Word
           commit_email: ben@benword.com
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          commit_message: "Update to ${{ github.ref_name }}"
+          commit_message: "Update to ${{ env.TAG }}"
           ssh_keyscan_types: rsa,ecdsa,ed25519
 
       - name: Publish quien-bin to AUR
-        if: ${{ !contains(github.ref_name, '-') }}
+        if: ${{ !contains(env.TAG, '-') }}
         uses: KSXGitHub/github-actions-deploy-aur@da03e160361ce01bf087e790b6ffd196d7dccff7 # v4.1.3
         with:
           pkgname: quien-bin
@@ -191,5 +257,5 @@ jobs:
           commit_username: Ben Word
           commit_email: ben@benword.com
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          commit_message: "Update to ${{ github.ref_name }}"
+          commit_message: "Update to ${{ env.TAG }}"
           ssh_keyscan_types: rsa,ecdsa,ed25519

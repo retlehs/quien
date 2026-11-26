@@ -19,7 +19,7 @@
               buildGoModule (finalAttrs: {
                 pname = "quien";
                 version = "0.12.0";
-                vendorHash = "sha256-PIBHAi92+k9Cr2koPZ/Oyu6vhtgso7mfTcK1W7l9sMM=";
+                vendorHash = "sha256-PtBmRlAGBol15y8vcB4XV5pJwcvg8XXjdI98jejurZA=";
                 src = ./.;
 
                 env.CGO_ENABLED = 0;
